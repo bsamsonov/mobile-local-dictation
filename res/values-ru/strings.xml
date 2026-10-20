@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ime_name">Локальный голосовой ввод</string>
+    <string name="subtype_label">Голос (на устройстве)</string>
+
+    <string name="key_space">пробел</string>
+    <string name="mic_start">🎤  Диктовать</string>
+    <string name="mic_stop">■  Стоп</string>
+    <string name="status_idle">Локально · %1$s · нажмите «Диктовать»</string>
+    <string name="status_stopped">Остановлено</string>
+    <string name="status_stopped_by_voice">Остановлено командой «стоп»</string>
+    <string name="status_no_mic">Нет доступа к микрофону — откройте приложение Local Dictation и выдайте разрешение</string>
+    <string name="status_no_ondevice">Локальное распознавание на этом устройстве недоступно (см. диагностику в приложении)</string>
+    <string name="status_connecting">Подключаюсь…</string>
+    <string name="status_ready">Говорите… (локально, %1$s)</string>
+    <string name="status_listening">Слушаю…</string>
+    <string name="status_recognizing">Распознаю…</string>
+    <string name="status_stalled">Распознаватель завис, перезапускаю…</string>
+    <string name="status_busy_wait">Распознаватель занят, жду…</string>
+    <string name="status_busy_giveup">Распознаватель занят. Нажмите «Диктовать» ещё раз.</string>
+    <string name="status_model_missing">Модель «%1$s» не установлена на устройстве. Откройте Local Dictation → «Скачать модель».</string>
+    <string name="status_error_retry">Ошибка %1$s, перезапуск…</string>
+    <string name="status_error_giveup">Ошибка распознавания: %1$s. Нажмите «Диктовать» ещё раз.</string>
+
+    <string name="intro">Голосовая «клавиатура», которая распознаёт речь ТОЛЬКО локальной моделью устройства (без облака, даже при включённом интернете) и вставляет текст туда, где стоит курсор.</string>
+    <string name="h_setup">1. Настройка</string>
+    <string name="btn_grant_mic">Разрешить микрофон</string>
+    <string name="btn_enable_ime">Включить клавиатуру в настройках</string>
+    <string name="btn_pick_ime">Переключить клавиатуру…</string>
+    <string name="setup_mic">Доступ к микрофону</string>
+    <string name="setup_enabled">Клавиатура включена в системе</string>
+    <string name="setup_active">✅ Сейчас выбрана</string>
+    <string name="setup_inactive">ℹ️ Сейчас выбрана другая клавиатура (это нормально)</string>
+    <string name="h_language">2. Язык и модель</string>
+    <string name="language_label">Язык распознавания (BCP-47, напр. ru-RU, en-US, uk-UA):</string>
+    <string name="btn_check_langs">Проверить локальные языки</string>
+    <string name="btn_download">Скачать модель для этого языка</string>
+    <string name="opt_autostart">Начинать диктовку сразу при открытии клавиатуры</string>
+    <string name="opt_formatting">Просить у модели пунктуацию (Android 13+; выключите, если будут ошибки)</string>
+    <string name="opt_commands">Голосовые команды: «новая строка», «новый абзац», «стоп» (в конце фразы)</string>
+    <string name="opt_digits">Числа цифрами («двадцать пять» → 25; одиночные «один»…«девять» остаются словами)</string>
+    <string name="opt_continuous">Непрерывная запись микрофона (не терять слова между фразами; Android 13+)</string>
+    <string name="h_try">3. Проверка</string>
+    <string name="try_text">Нажмите в поле ниже и переключитесь на «Локальный голосовой ввод» (кнопка клавиатуры на панели навигации или кнопка выше).</string>
+    <string name="try_hint">Диктуйте сюда…</string>
+    <string name="h_diag">Диагностика</string>
+    <string name="lang_needs_33">Доступно с Android 13</string>
+    <string name="lang_no_ondevice">❌ Локальное распознавание недоступно</string>
+    <string name="lang_checking">Проверяю…</string>
+    <string name="lang_installed">✅ модель установлена</string>
+    <string name="lang_pending">⏳ модель скачивается</string>
+    <string name="lang_supported">⬇️ поддерживается, но не скачана</string>
+    <string name="lang_unsupported">❌ локально не поддерживается</string>
+    <string name="lang_lists">Установлены: %1$s\nСкачиваются: %2$s\nМожно скачать: %3$s\nТолько онлайн: %4$s</string>
+    <string name="lang_check_failed">Не удалось проверить: %1$s\n(движок может не поддерживать эту проверку — просто попробуйте диктовать)</string>
+    <string name="dl_requesting">Запрашиваю загрузку…</string>
+    <string name="dl_progress">Загрузка: %1$d%%</string>
+    <string name="dl_success">✅ Модель установлена</string>
+    <string name="dl_scheduled">⏳ Загрузка запланирована системой (часто ждёт Wi-Fi/зарядку)</string>
+    <string name="dl_error">Ошибка загрузки: %1$s</string>
+    <string name="dl_sent">Запрос на загрузку отправлен — проверьте статус кнопкой выше через минуту</string>
+</resources>

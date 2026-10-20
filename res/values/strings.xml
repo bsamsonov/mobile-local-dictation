@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Local Dictation</string>
+    <string name="ime_name">On-device voice input</string>
+    <string name="subtype_label">Voice (on-device)</string>
+
+    <!-- Keyboard -->
+    <string name="key_space">space</string>
+    <string name="mic_start">🎤  Dictate</string>
+    <string name="mic_stop">■  Stop</string>
+    <string name="status_idle">On-device · %1$s · tap “Dictate”</string>
+    <string name="status_stopped">Stopped</string>
+    <string name="status_stopped_by_voice">Stopped by voice command</string>
+    <string name="status_no_mic">No microphone access. Open Local Dictation and grant the permission.</string>
+    <string name="status_no_ondevice">On-device recognition is not available on this device (see diagnostics in the app).</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_ready">Speak… (on-device, %1$s)</string>
+    <string name="status_listening">Listening…</string>
+    <string name="status_recognizing">Recognizing…</string>
+    <string name="status_stalled">Recognizer stalled, restarting…</string>
+    <string name="status_busy_wait">Recognizer is busy, waiting…</string>
+    <string name="status_busy_giveup">Recognizer is busy. Tap “Dictate” again.</string>
+    <string name="status_model_missing">The “%1$s” model is not installed. Open Local Dictation → “Download model”.</string>
+    <string name="status_error_retry">Error %1$s, restarting…</string>
+    <string name="status_error_giveup">Recognition error: %1$s. Tap “Dictate” again.</string>
+
+    <!-- Setup screen -->
+    <string name="intro">A voice keyboard that recognizes speech ONLY with the device\'s on-device model (no cloud, even when online) and inserts the text at the cursor.</string>
+    <string name="h_setup">1. Setup</string>
+    <string name="btn_grant_mic">Grant microphone access</string>
+    <string name="btn_enable_ime">Enable the keyboard in Settings</string>
+    <string name="btn_pick_ime">Switch keyboard…</string>
+    <string name="setup_mic">Microphone access</string>
+    <string name="setup_enabled">Keyboard enabled in the system</string>
+    <string name="setup_active">✅ Currently selected</string>
+    <string name="setup_inactive">ℹ️ Another keyboard is selected right now (that\'s fine)</string>
+    <string name="h_language">2. Language and model</string>
+    <string name="language_label">Recognition language (BCP-47, e.g. ru-RU, en-US, uk-UA):</string>
+    <string name="btn_check_langs">Check on-device languages</string>
+    <string name="btn_download">Download the model for this language</string>
+    <string name="opt_autostart">Start dictating as soon as the keyboard opens</string>
+    <string name="opt_formatting">Ask the model for punctuation (Android 13+; turn off if you see errors)</string>
+    <string name="opt_commands">Voice commands (Russian only): “new line”, “new paragraph”, “stop” at the end of a phrase</string>
+    <string name="opt_digits">Numbers as digits (Russian only; single numbers one…nine stay words)</string>
+    <string name="opt_continuous">Continuous microphone capture (don’t lose words between phrases; Android 13+)</string>
+    <string name="h_try">3. Try it</string>
+    <string name="try_text">Tap the field below and switch to “On-device voice input” (keyboard button in the navigation bar, or the button above).</string>
+    <string name="try_hint">Dictate here…</string>
+    <string name="h_diag">Diagnostics</string>
+    <string name="lang_needs_33">Available on Android 13+</string>
+    <string name="lang_no_ondevice">❌ On-device recognition is not available</string>
+    <string name="lang_checking">Checking…</string>
+    <string name="lang_installed">✅ model installed</string>
+    <string name="lang_pending">⏳ model is downloading</string>
+    <string name="lang_supported">⬇️ supported, not downloaded yet</string>
+    <string name="lang_unsupported">❌ not supported on-device</string>
+    <string name="lang_lists">Installed: %1$s\nDownloading: %2$s\nDownloadable: %3$s\nOnline only: %4$s</string>
+    <string name="lang_check_failed">Could not check: %1$s\n(the engine may not support this check; just try dictating)</string>
+    <string name="dl_requesting">Requesting download…</string>
+    <string name="dl_progress">Downloading: %1$d%%</string>
+    <string name="dl_success">✅ Model installed</string>
+    <string name="dl_scheduled">⏳ Download scheduled by the system (often waits for Wi-Fi or charging)</string>
+    <string name="dl_error">Download error: %1$s</string>
+    <string name="dl_sent">Download requested. Check the status with the button above in a minute.</string>
+</resources>

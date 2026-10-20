@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- imeSubtypeMode="voice": lets other keyboards / the system treat this IME as a voice input method -->
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.bvs.localdictation.MainActivity">
+    <subtype
+        android:label="@string/subtype_label"
+        android:imeSubtypeLocale="ru_RU"
+        android:imeSubtypeMode="voice"
+        android:isAuxiliary="false" />
+</input-method>
