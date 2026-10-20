@@ -13,6 +13,7 @@ These do not change; every change is checked against them.
 4. Post-processing is pure Java with unit tests; every new rule comes with a test.
 5. Recognized text is never written to logs.
 6. UI strings live in resources (en + ru); non-English text in code only in allowlisted functional-data files.
+7. Every release is signed with the same key; an APK signed with another key does not install over the current one.
 
 ## Technical context
 - Java without Gradle: `build.sh` (aapt2, javac, d8, apksigner); minSdk 31, targetSdk 35; CI on GitHub Actions.
@@ -55,4 +56,8 @@ Cloud recognition; a full letter keyboard; a bundled engine (Whisper, Vosk); Goo
 - Archiving: once a change is implemented and verified on the phone, its deltas are merged into `specs/`
   and the folder moves to `changes/archive/YYYY-MM-DD-<name>/`.
   CLI: `npx @fission-ai/openspec archive <name>`; validation: `npx @fission-ai/openspec validate --all`.
-- Every change links to an issue of this repository.
+- Every change links to an issue of this repository, except spec-only corrections (no code change).
+- Bug fixes that restore behavior the spec already describes go straight to code, without a change folder.
+  When the spec itself turns out wrong (the plan did not work on the device), the fix is a change with
+  `MODIFIED` deltas and a design.md that records what was tried and why it changed.
+- CI runs `openspec validate --all` on every push, next to the unit tests and the APK build.
