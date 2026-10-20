@@ -88,8 +88,12 @@ public class MainActivity extends Activity {
         langField.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
             public void onTextChanged(CharSequence s, int a, int b, int c) {}
-            public void afterTextChanged(Editable s) { Speech.setLanguage(MainActivity.this, s.toString()); }
+            public void afterTextChanged(Editable s) {
+                // Only typing by the user counts (not state restore or the drop-down mirroring its pick).
+                if (langField.hasFocus()) Speech.setLanguage(MainActivity.this, s.toString());
+            }
         });
+        langField.setSaveEnabled(false);
         langField.setVisibility(View.GONE);
         col.addView(langField);
         langStatus = text("", 14);
