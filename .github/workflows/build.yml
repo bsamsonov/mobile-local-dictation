@@ -15,6 +15,16 @@ jobs:
           java-version: '17'
       - name: Install Android SDK packages
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+      - name: No Cyrillic outside functional-data files
+        run: |
+          found=$(git grep -lP '[\x{0400}-\x{04FF}]' -- . \
+            ':!res/values-ru/strings.xml' \
+            ':!src/com/bvs/localdictation/TextPost.java' \
+            ':!test/com/bvs/localdictation/TextPostTest.java' \
+            ':!openspec/**/text-postprocessing/spec.md' || true)
+          if [ -n "$found" ]; then echo "Cyrillic found in: $found"; exit 1; fi
+      - name: Validate OpenSpec
+        run: OPENSPEC_TELEMETRY=0 npx -y @fission-ai/openspec@latest validate --all --no-interactive
       - name: Test
         run: ./build.sh test
       - name: Build
