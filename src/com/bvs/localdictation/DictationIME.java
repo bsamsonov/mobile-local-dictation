@@ -59,6 +59,8 @@ public class DictationIME extends InputMethodService implements RecognitionListe
     private long replayFrom;
     /** The current session became ready and has not ended yet. */
     private boolean sessionLive;
+    /** Latest partial text of the current session ("" if none). */
+    private String lastPartial = "";
     private final Runnable feederCheck = () -> {
         if (feeder != null && feeder.isBlocked() && listening) {
             Log.w(TAG, "engine does not read EXTRA_AUDIO_SOURCE; falling back to its own mic");
@@ -246,6 +248,7 @@ public class DictationIME extends InputMethodService implements RecognitionListe
         segmentStarted = false;
         Log.d(TAG, "startListening " + Speech.language(this) + " feeder=" + (feeder != null));
         sessionLive = false;
+        lastPartial = "";
         Intent intent = Speech.recognizeIntent(this);
         if (feeder != null) {
             try {
@@ -289,7 +292,8 @@ public class DictationIME extends InputMethodService implements RecognitionListe
         if (!sessionLive) return;   // late event of an older session, or a session that never started
         sessionLive = false;
         replayFrom = SystemClock.elapsedRealtime() - 150;
-        if (feeder != null) feeder.endSession();
+        // Do not close the pipe here: EOF right after end of speech makes the engine fail with
+        // SODA_ERROR (ERROR_CLIENT) instead of delivering results. newSession() closes it later.
     }
 
     private void arm(long ms) {
@@ -339,7 +343,7 @@ public class DictationIME extends InputMethodService implements RecognitionListe
         String t = text == null ? "" : text.trim();
         if (t.isEmpty()) return "";
         boolean ru = Speech.isRussian(this);
-        if (ru && Speech.voiceCommands(this)) t = TextPost.voiceCommands(t);
+        if (Speech.voiceCommands(this)) t = TextPost.voiceCommands(t);
         if (ru && Speech.digits(this)) t = TextPost.numbersToDigits(t);
         if (t.startsWith("\n")) return t;   // starts with a line break: no leading space, already capitalised
         if (segmentCapitalize) {
@@ -404,6 +408,7 @@ public class DictationIME extends InputMethodService implements RecognitionListe
         InputConnection ic = getCurrentInputConnection();
         if (ic == null || text.trim().isEmpty()) return;
         if (!segmentStarted) decideSegmentFormat(ic);
+        lastPartial = text;
         ic.setComposingText(format(text), 1);
     }
 
@@ -446,6 +451,7 @@ public class DictationIME extends InputMethodService implements RecognitionListe
      */
     private boolean commitFinal(Bundle results) {
         markHandoff();
+        lastPartial = "";
         consecutiveErrors = 0;
         handler.removeCallbacks(watchdog);
         String text = best(results);
@@ -480,6 +486,18 @@ public class DictationIME extends InputMethodService implements RecognitionListe
         Log.d(TAG, "error " + Speech.errorName(error) + " listening=" + listening);
         handler.removeCallbacks(watchdog);
         markHandoff();
+        if (listening && !lastPartial.trim().isEmpty()) {
+            // The engine often fails (ERROR_CLIENT) instead of delivering the final result:
+            // treat the last partial as final so voice commands and digits still apply.
+            Bundle b = new Bundle();
+            b.putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION,
+                    new java.util.ArrayList<>(java.util.Collections.singletonList(lastPartial)));
+            if (!commitFinal(b)) return;
+            if (error == SpeechRecognizer.ERROR_CLIENT || error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED) recreateRecognizer();
+            restartSoon(200);
+            return;
+        }
+        lastPartial = "";
         InputConnection ic = getCurrentInputConnection();
         if (ic != null) ic.finishComposingText();
         segmentStarted = false;

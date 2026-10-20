@@ -34,6 +34,10 @@ public class TextPostTest {
                 {"конец мысли. Новый абзац. начало", "конец мысли.\n\nНачало"},
                 {"строка новая", "строка новая"},
                 {"Новая строка", "\n"},
+                {"Hello. New line. how are you", "Hello.\nHow are you"},
+                {"done enter next", "done\nNext"},
+                {"first. New paragraph. second", "first.\n\nSecond"},
+                {"Энтер", "\n"},
         };
         for (String[] c : cmd) {
             String got = TextPost.voiceCommands(c[0]);

@@ -17,7 +17,8 @@ on-device model for them is installed.
 - Recovery from a stalled or busy recognizer (watchdog, recreate + back-off).
 - Keys: switch keyboard ⌨, settings ⚙, backspace, `,` `.` `?`, space, enter.
 - Punctuation by voice ("comma", "period") is done by the engine itself (formatting, Android 13+).
-- Russian post-processing (`TextPost`): spoken "new line" / "new paragraph" commands, numbers as digits,
+- Voice commands "new line" / "enter" / "new paragraph" (English and Russian) insert line breaks.
+- Russian post-processing (`TextPost`): numbers as digits,
   "stop" at the end of a phrase stops dictation.
 - Settings screen: microphone permission, enabling the IME, checking and downloading the on-device
   language model, diagnostics of which recognition service the firmware uses.
@@ -29,7 +30,7 @@ on-device model for them is installed.
   Samsung's own engine is not available to third-party apps.
 - The engine ends a session on every pause and does not support segmented sessions, so the app restarts sessions;
   continuous capture hides most of the gap, but rare glitches are possible.
-- Voice commands and digit conversion are implemented for Russian only.
+- Digit conversion and the "stop" command are implemented for Russian only.
 
 ## Build
 

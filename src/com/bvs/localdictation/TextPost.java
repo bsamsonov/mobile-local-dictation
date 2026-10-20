@@ -21,9 +21,9 @@ final class TextPost {
     private static final String NR = "(?!\\p{L})";    // no letter after
 
     private static final Pattern PARAGRAPH = Pattern.compile(
-            "[ \\t]*" + NL + "(?:новый абзац|с нового абзаца)" + NR + "[.,;:!?]?[ \\t]*", FLAGS);
+            "[ \\t]*" + NL + "(?:новый абзац|с нового абзаца|new paragraph)" + NR + "[.,;:!?]?[ \\t]*", FLAGS);
     private static final Pattern NEWLINE = Pattern.compile(
-            "[ \\t]*" + NL + "(?:новая строка|новую строку|с новой строки|перевод строки)" + NR
+            "[ \\t]*" + NL + "(?:новая строка|новую строку|с новой строки|перевод строки|энтер|new line|newline|enter)" + NR
                     + "[.,;:!?]?[ \\t]*", FLAGS);
     private static final Pattern AFTER_NEWLINE = Pattern.compile("\n(\\p{Ll})");
 
@@ -39,7 +39,7 @@ final class TextPost {
         return m.matches() ? m.group(1) : null;
     }
 
-    /** Spoken "new line" / "new paragraph" (Russian) -> "\n" / "\n\n"; capitalises the next line. */
+    /** Spoken "new line" / "enter" / "new paragraph" (Russian and English) -> "\n" / "\n\n"; capitalises the next line. */
     static String voiceCommands(String s) {
         s = PARAGRAPH.matcher(s).replaceAll("\n\n");
         s = NEWLINE.matcher(s).replaceAll("\n");
