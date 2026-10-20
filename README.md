@@ -43,7 +43,8 @@ I dictate notes on a Samsung phone, and the stock voice input kept getting in th
   "stop" (said in Russian) at the end of a phrase stops dictation.
 - Settings screen: microphone permission, enabling the IME, a language drop-down showing which on-device
   models are installed (default English; your pick is kept), model download, diagnostics of which
-  recognition service the firmware uses.
+  recognition service the firmware uses. Changes are saved at once (a short "Saved" confirms it); Done or the
+  up arrow closes the screen.
 - A stop is remembered: after you tap Stop, locking and unlocking the phone does not turn the mic back on;
   switching to this keyboard from another one starts dictation again.
 - UI in English and Russian (per-app language on Android 13+).
