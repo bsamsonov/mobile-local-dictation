@@ -19,6 +19,7 @@ import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
 import android.util.TypedValue;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.inputmethod.InputMethodInfo;
 import android.view.inputmethod.InputMethodManager;
@@ -31,6 +32,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -104,27 +106,27 @@ public class MainActivity extends Activity {
         CheckBox auto = new CheckBox(this);
         auto.setText(R.string.opt_autostart);
         auto.setChecked(Speech.autoStart(this));
-        auto.setOnCheckedChangeListener((b, c) -> Speech.setAutoStart(this, c));
+        auto.setOnCheckedChangeListener((b, c) -> { Speech.setAutoStart(this, c); saved(); });
         col.addView(auto);
         CheckBox fmt = new CheckBox(this);
         fmt.setText(R.string.opt_formatting);
         fmt.setChecked(Speech.formatting(this));
-        fmt.setOnCheckedChangeListener((b, c) -> Speech.setFormatting(this, c));
+        fmt.setOnCheckedChangeListener((b, c) -> { Speech.setFormatting(this, c); saved(); });
         col.addView(fmt);
         CheckBox cmds = new CheckBox(this);
         cmds.setText(R.string.opt_commands);
         cmds.setChecked(Speech.voiceCommands(this));
-        cmds.setOnCheckedChangeListener((b, c) -> Speech.setVoiceCommands(this, c));
+        cmds.setOnCheckedChangeListener((b, c) -> { Speech.setVoiceCommands(this, c); saved(); });
         col.addView(cmds);
         CheckBox dig = new CheckBox(this);
         dig.setText(R.string.opt_digits);
         dig.setChecked(Speech.digits(this));
-        dig.setOnCheckedChangeListener((b, c) -> Speech.setDigits(this, c));
+        dig.setOnCheckedChangeListener((b, c) -> { Speech.setDigits(this, c); saved(); });
         col.addView(dig);
         CheckBox cont = new CheckBox(this);
         cont.setText(R.string.opt_continuous);
         cont.setChecked(Speech.continuousAudio(this));
-        cont.setOnCheckedChangeListener((b, c) -> Speech.setContinuousAudio(this, c));
+        cont.setOnCheckedChangeListener((b, c) -> { Speech.setContinuousAudio(this, c); saved(); });
         col.addView(cont);
 
         col.addView(header(getString(R.string.h_try)));
@@ -140,8 +142,28 @@ public class MainActivity extends Activity {
         diag.setTextIsSelectable(true);
         col.addView(diag);
 
-        setContentView(scroll);
+        // Fixed bottom bar: an obvious way out, always visible while scrolling.
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
+        Button done = button(getString(R.string.btn_done), v -> finish());
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(dp(16), dp(4), dp(16), dp(8));
+        root.addView(done, lp);
+        setContentView(root);
+        if (getActionBar() != null) getActionBar().setDisplayHomeAsUpEnabled(true);
         loadLanguages(false);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == android.R.id.home) { finish(); return true; }
+        return super.onOptionsItemSelected(item);
+    }
+
+    /** Settings are saved on every change; say so, since there is no Save button. */
+    private void saved() {
+        Toast.makeText(this, R.string.saved, Toast.LENGTH_SHORT).show();
     }
 
     @Override
@@ -265,6 +287,7 @@ public class MainActivity extends Activity {
         if (!langTouched || Languages.norm(e.tag).equals(Languages.norm(Speech.language(this)))) return;
         Speech.setLanguage(this, e.tag);
         langField.setText(e.tag);
+        saved();
         langStatus.setText(stateLine(e));
     }
 

@@ -37,6 +37,8 @@
     <string name="language_hint">Тег BCP-47, напр. ru-RU, en-US, uk-UA</string>
     <string name="lang_none">Движок не сообщил локальных языков. Введите тег языка:</string>
     <string name="lang_needs_download">Модель этого языка ещё не установлена. Нажмите «Скачать модель для этого языка».</string>
+    <string name="btn_done">Готово</string>
+    <string name="saved">Сохранено</string>
     <string name="btn_check_langs">Проверить локальные языки</string>
     <string name="btn_download">Скачать модель для этого языка</string>
     <string name="opt_autostart">Начинать диктовку сразу при открытии клавиатуры</string>

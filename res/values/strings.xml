@@ -40,6 +40,8 @@
     <string name="language_hint">BCP-47 tag, e.g. ru-RU, en-US, uk-UA</string>
     <string name="lang_none">The engine reported no on-device languages. Enter a language tag:</string>
     <string name="lang_needs_download">The model for this language is not installed yet. Tap “Download the model for this language”.</string>
+    <string name="btn_done">Done</string>
+    <string name="saved">Saved</string>
     <string name="btn_check_langs">Check on-device languages</string>
     <string name="btn_download">Download the model for this language</string>
     <string name="opt_autostart">Start dictating as soon as the keyboard opens</string>
