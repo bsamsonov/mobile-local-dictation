@@ -38,7 +38,7 @@
     <string name="btn_download">Скачать модель для этого языка</string>
     <string name="opt_autostart">Начинать диктовку сразу при открытии клавиатуры</string>
     <string name="opt_formatting">Просить у модели пунктуацию (Android 13+; выключите, если будут ошибки)</string>
-    <string name="opt_commands">Голосовые команды: «новая строка», «новый абзац», «стоп» (в конце фразы)</string>
+    <string name="opt_commands">Голосовые команды: «новая строка», «новый абзац», «энтер» (любой язык); «стоп» в конце фразы (только русский)</string>
     <string name="opt_digits">Числа цифрами («двадцать пять» → 25; одиночные «один»…«девять» остаются словами)</string>
     <string name="opt_continuous">Непрерывная запись микрофона (не терять слова между фразами; Android 13+)</string>
     <string name="h_try">3. Проверка</string>
