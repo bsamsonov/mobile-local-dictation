@@ -81,3 +81,18 @@ The app SHALL NOT write recognized text to logs; logs MAY contain events and tex
 #### Scenario: Debug log
 - **WHEN** a partial result arrives
 - **THEN** only its length is logged
+
+### Requirement: Remembered stop
+A stop by the user (Stop key or spoken "stop") SHALL be saved, and auto-start SHALL NOT fire while it is saved,
+including after a screen lock/unlock and in other fields and apps. Tapping Dictate SHALL clear it. Switching to this
+keyboard from another keyboard SHALL clear it, so dictation auto-starts. Stops caused by errors SHALL NOT be saved.
+
+#### Scenario: Lock and unlock after a stop
+- **GIVEN** the user stopped dictation with the Stop key
+- **WHEN** the user locks and unlocks the phone and the keyboard is shown again
+- **THEN** dictation does not start and the key shows "Dictate"
+
+#### Scenario: Back from another keyboard
+- **GIVEN** the user stopped dictation and switched to Samsung Keyboard
+- **WHEN** the user switches back to this keyboard
+- **THEN** dictation starts automatically
