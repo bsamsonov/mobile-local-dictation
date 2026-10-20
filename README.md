@@ -35,8 +35,11 @@ I dictate notes on a Samsung phone, and the stock voice input kept getting in th
 - Voice commands "new line" / "enter" / "new paragraph" (English and Russian) insert line breaks.
 - Russian post-processing (`TextPost`): numbers as digits,
   "stop" (said in Russian) at the end of a phrase stops dictation.
-- Settings screen: microphone permission, enabling the IME, checking and downloading the on-device
-  language model, diagnostics of which recognition service the firmware uses.
+- Settings screen: microphone permission, enabling the IME, a language drop-down showing which on-device
+  models are installed (default English; your pick is kept), model download, diagnostics of which
+  recognition service the firmware uses.
+- A stop is remembered: after you tap Stop, locking and unlocking the phone does not turn the mic back on;
+  switching to this keyboard from another one starts dictation again.
 - UI in English and Russian (per-app language on Android 13+).
 
 ## Works offline
@@ -117,7 +120,7 @@ Requirements: JDK 17+, Android SDK with `platforms;android-35` and `build-tools;
 Behavior is specified with [OpenSpec](https://github.com/Fission-AI/OpenSpec) in [`openspec/`](openspec/):
 [`project.md`](openspec/project.md) (principles, success criteria), current specs in
 [`openspec/specs/`](openspec/specs/) (dictation, keyboard keys, settings, text post-processing) and planned work in
-[`openspec/changes/`](openspec/changes/) (language picker, model download prompt, English terms in Russian speech).
+[`openspec/changes/`](openspec/changes/) (model download prompt, English terms in Russian speech; done changes are in `openspec/changes/archive/`).
 
 ```bash
 npx @fission-ai/openspec validate --all
