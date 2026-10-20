@@ -25,6 +25,7 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -117,7 +118,11 @@ public class DictationIME extends InputMethodService implements RecognitionListe
         root.addView(row1, new LinearLayout.LayoutParams(-1, dp(72)));
 
         LinearLayout row2 = row();
-        row2.addView(key("⚙", v -> openSettings()), weight(1));
+        ImageButton gear = new ImageButton(this);
+        gear.setImageResource(R.drawable.ic_settings);
+        gear.setContentDescription(getString(R.string.key_settings));
+        gear.setOnClickListener(v -> openSettings());
+        row2.addView(gear, weight(1));
         row2.addView(key(",", v -> commitRaw(",")), weight(1));
         row2.addView(key(".", v -> commitRaw(".")), weight(1));
         row2.addView(key("?", v -> commitRaw("?")), weight(1));

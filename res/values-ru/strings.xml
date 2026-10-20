@@ -4,6 +4,7 @@
     <string name="subtype_label">Голос (на устройстве)</string>
 
     <string name="key_space">пробел</string>
+    <string name="key_settings">Настройки</string>
     <string name="mic_start">🎤  Диктовать</string>
     <string name="mic_stop">■  Стоп</string>
     <string name="status_idle">Локально · %1$s · нажмите «Диктовать»</string>

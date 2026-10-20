@@ -6,6 +6,7 @@
 
     <!-- Keyboard -->
     <string name="key_space">space</string>
+    <string name="key_settings">Settings</string>
     <string name="mic_start">🎤  Dictate</string>
     <string name="mic_stop">■  Stop</string>
     <string name="status_idle">On-device · %1$s · tap “Dictate”</string>
