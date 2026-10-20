@@ -117,6 +117,7 @@ public class DictationIME extends InputMethodService implements RecognitionListe
         root.addView(row1, new LinearLayout.LayoutParams(-1, dp(72)));
 
         LinearLayout row2 = row();
+        row2.addView(key("⚙", v -> openSettings()), weight(1));
         row2.addView(key(",", v -> commitRaw(",")), weight(1));
         row2.addView(key(".", v -> commitRaw(".")), weight(1));
         row2.addView(key("?", v -> commitRaw("?")), weight(1));
@@ -136,6 +137,11 @@ public class DictationIME extends InputMethodService implements RecognitionListe
         LinearLayout r = new LinearLayout(this);
         r.setOrientation(LinearLayout.HORIZONTAL);
         return r;
+    }
+
+    private void openSettings() {
+        haltListening();
+        startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
     }
 
     private Button key(String label, View.OnClickListener l) {

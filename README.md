@@ -15,7 +15,7 @@ on-device model for them is installed.
 - Continuous microphone capture (Android 13+): the app records the mic itself and feeds the audio to the
   engine (`EXTRA_AUDIO_SOURCE`) with a short replay buffer, so words spoken while a new session starts are not lost.
 - Recovery from a stalled or busy recognizer (watchdog, recreate + back-off).
-- Keys: switch keyboard ⌨, backspace, `,` `.` `?`, space, enter.
+- Keys: switch keyboard ⌨, settings ⚙, backspace, `,` `.` `?`, space, enter.
 - Punctuation by voice ("comma", "period") is done by the engine itself (formatting, Android 13+).
 - Russian post-processing (`TextPost`): spoken "new line" / "new paragraph" commands, numbers as digits,
   "stop" at the end of a phrase stops dictation.
