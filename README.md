@@ -1,5 +1,8 @@
 # Local Dictation
 
+[![build](https://github.com/bsamsonov/mobile-local-dictation/actions/workflows/build.yml/badge.svg)](https://github.com/bsamsonov/mobile-local-dictation/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 An Android voice keyboard (IME) that recognizes speech **only on the device** and types the text at the
 cursor in any app. No cloud, no network: it uses the on-device recognizer that ships with the phone
 (`SpeechRecognizer.createOnDeviceSpeechRecognizer`, Android 12+).
@@ -15,14 +18,39 @@ on-device model for them is installed.
 - Continuous microphone capture (Android 13+): the app records the mic itself and feeds the audio to the
   engine (`EXTRA_AUDIO_SOURCE`) with a short replay buffer, so words spoken while a new session starts are not lost.
 - Recovery from a stalled or busy recognizer (watchdog, recreate + back-off).
-- Keys: switch keyboard ⌨, settings ⚙, backspace, `,` `.` `?`, space, enter.
+- Keys for what voice does badly: line break, punctuation, settings, back to your regular keyboard (see [Keys](#keys)).
 - Punctuation by voice ("comma", "period") is done by the engine itself (formatting, Android 13+).
 - Voice commands "new line" / "enter" / "new paragraph" (English and Russian) insert line breaks.
 - Russian post-processing (`TextPost`): numbers as digits,
-  "stop" at the end of a phrase stops dictation.
+  "stop" (said in Russian) at the end of a phrase stops dictation.
 - Settings screen: microphone permission, enabling the IME, checking and downloading the on-device
   language model, diagnostics of which recognition service the firmware uses.
 - UI in English and Russian (per-app language on Android 13+).
+
+## Works offline
+
+The app has no `INTERNET` permission. Recognition runs on the phone's built-in Google on-device model
+(Android System Intelligence), so in airplane mode you still get:
+
+| Offline | Needs network |
+|---|---|
+| Speech recognition (installed language model) | Downloading a language model, once (done by the system; may wait for Wi-Fi or charging) |
+| Spoken punctuation (engine formatting, Android 13+) | |
+| "new line" / "new paragraph" / "stop" commands, digits | |
+| All keyboard keys, settings, diagnostics | |
+
+Languages the engine offers only online are not used: the app never falls back to cloud recognition.
+
+## Keys
+
+| Key | Action |
+|---|---|
+| 🎤 Dictate / ■ Stop | Start continuous dictation / stop it |
+| ⌨ | Stop dictation and return to the previous (regular) keyboard; long press opens the keyboard picker |
+| ⚙ | Stop dictation and open the settings screen |
+| ↵ | Line break (sends Enter to the field) |
+| `,` `.` `?` | Insert the punctuation mark at the cursor |
+| space, ⌫ | Space and backspace |
 
 ## Limitations
 
@@ -64,6 +92,17 @@ Requirements: JDK 17+, Android SDK with `platforms;android-35` and `build-tools;
 | `MainActivity.java` | Settings, permissions, model check/download, diagnostics |
 | `Speech.java` | Preferences and the `RecognizerIntent` |
 | `TextPost.java` | Russian post-processing (pure Java, tested in `test/`) |
+
+## Specification
+
+Behavior is specified with [OpenSpec](https://github.com/Fission-AI/OpenSpec) in [`openspec/`](openspec/):
+[`project.md`](openspec/project.md) (principles, success criteria), current specs in
+[`openspec/specs/`](openspec/specs/) (dictation, keyboard keys, settings, text post-processing) and planned work in
+[`openspec/changes/`](openspec/changes/) (language picker, model download prompt, English terms in Russian speech).
+
+```bash
+npx @fission-ai/openspec validate --all
+```
 
 ## Troubleshooting
 
