@@ -63,3 +63,11 @@ The settings screen SHALL show the installed recognition services and which of t
 #### Scenario: Diagnostics
 - **WHEN** the user opens the diagnostics
 - **THEN** the on-device service from the firmware config and all installed RecognitionService components are listed
+
+### Requirement: Try-it field
+The settings screen SHALL have a multi-line text field with a short instruction, so the user can switch to the voice
+keyboard and test dictation without leaving the app.
+
+#### Scenario: Test dictation in the app
+- **WHEN** the user taps the "Try it" field and switches to "On-device voice input"
+- **THEN** the voice keyboard opens and dictated text appears in that field
