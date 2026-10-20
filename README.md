@@ -11,6 +11,21 @@ Built and tested on a Samsung Galaxy S23 (Android 16), where the on-device engin
 Android System Intelligence (SODA). Russian is the main use case; other languages work if the
 on-device model for them is installed.
 
+## Why
+
+I dictate notes on a Samsung phone, and the stock voice input kept getting in the way:
+
+- **It tries to work online.** Samsung's default recognizer goes to the network, and on a weak or flaky connection it
+  lags, drops words or fails, even though the phone already has a good on-device model. This keyboard uses only the
+  on-device model, so a bad connection (or none) makes no difference.
+- **No line breaks by voice.** There was no way to say "new line" and get one. Here "new line" / "new paragraph" /
+  "enter" are voice commands, and there is a ↵ key.
+- **Missing punctuation.** Some marks are hard to get by voice, so `,` `.` `?` are one tap away, next to the
+  engine's own spoken punctuation.
+- **No sentences from pauses.** Long dictation turns into one endless sentence unless every period is spoken.
+  Splitting into sentences at long pauses is the next planned feature
+  ([#4](https://github.com/bsamsonov/mobile-local-dictation/issues/4)).
+
 ## Features
 
 - Dictation into any text field; partial results appear as composing text, final results are committed.
@@ -59,6 +74,8 @@ Languages the engine offers only online are not used: the app never falls back t
 - The engine ends a session on every pause and does not support segmented sessions, so the app restarts sessions;
   continuous capture hides most of the gap, but rare glitches are possible.
 - Digit conversion and the "stop" command are implemented for Russian only.
+- A pause does not end a sentence yet: phrases are joined with a space until you say a period
+  ([#4](https://github.com/bsamsonov/mobile-local-dictation/issues/4)).
 
 ## Build
 
@@ -98,7 +115,7 @@ Requirements: JDK 17+, Android SDK with `platforms;android-35` and `build-tools;
 Behavior is specified with [OpenSpec](https://github.com/Fission-AI/OpenSpec) in [`openspec/`](openspec/):
 [`project.md`](openspec/project.md) (principles, success criteria), current specs in
 [`openspec/specs/`](openspec/specs/) (dictation, keyboard keys, settings, text post-processing) and planned work in
-[`openspec/changes/`](openspec/changes/) (language picker, model download prompt, English terms in Russian speech).
+[`openspec/changes/`](openspec/changes/) (sentence split at pauses, language picker, model download prompt, English terms in Russian speech).
 
 ```bash
 npx @fission-ai/openspec validate --all
