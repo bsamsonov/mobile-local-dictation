@@ -93,6 +93,15 @@ public class DictationIME extends InputMethodService implements RecognitionListe
     // ---------------------------------------------------------------- UI
 
     @Override
+    public void onCreate() {
+        super.onCreate();
+        // The service is created when the user switches to this keyboard from another one:
+        // that is a request to dictate, so a remembered stop no longer applies.
+        // Screen lock/unlock and moving between fields keep the service, so a stop is kept there.
+        Speech.setStoppedByUser(this, false);
+    }
+
+    @Override
     public View onCreateInputView() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -183,7 +192,10 @@ public class DictationIME extends InputMethodService implements RecognitionListe
         Log.d(TAG, "onStartInputView restarting=" + restarting + " pkg=" + info.packageName);
         consecutiveErrors = 0;
         handler.removeCallbacks(autoStart);
-        if (!restarting && !listening && Speech.autoStart(this)) handler.postDelayed(autoStart, 250);
+        // A stop by the user is remembered (screen lock/unlock, other fields): no auto-start until Dictate is tapped.
+        if (!restarting && !listening && Speech.autoStart(this) && !Speech.stoppedByUser(this)) {
+            handler.postDelayed(autoStart, 250);
+        }
         else updateUi(null);
     }
 
@@ -209,6 +221,7 @@ public class DictationIME extends InputMethodService implements RecognitionListe
     private void toggle() {
         if (listening) {
             listening = false;
+            Speech.setStoppedByUser(this, true);
             stopFeeder();
             handler.removeCallbacksAndMessages(null);
             // stopListening() still delivers onResults for what was already said.
@@ -216,6 +229,7 @@ public class DictationIME extends InputMethodService implements RecognitionListe
             updateUi(getString(R.string.status_stopped));
         } else {
             consecutiveErrors = 0;
+            Speech.setStoppedByUser(this, false);
             startListening();
         }
     }
@@ -472,6 +486,7 @@ public class DictationIME extends InputMethodService implements RecognitionListe
         segmentStarted = false;
         if (stopCommand) {
             listening = false;
+            Speech.setStoppedByUser(this, true);
             stopFeeder();
             handler.removeCallbacksAndMessages(null);
             if (recognizer != null) recognizer.cancel();

@@ -26,6 +26,11 @@ final class Speech {
 
     static void setLanguage(Context c, String v) { prefs(c).edit().putString("language", v).apply(); }
 
+    /** The user stopped dictation (key or voice "stop"): no auto-start until they tap Dictate again. */
+    static boolean stoppedByUser(Context c) { return prefs(c).getBoolean("stoppedByUser", false); }
+
+    static void setStoppedByUser(Context c, boolean v) { prefs(c).edit().putBoolean("stoppedByUser", v).apply(); }
+
     /** Start listening as soon as the voice keyboard is shown. */
     static boolean autoStart(Context c) { return prefs(c).getBoolean("autoStart", true); }
 
