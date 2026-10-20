@@ -11,14 +11,16 @@ import android.speech.SpeechRecognizer;
 final class Speech {
     private Speech() {}
 
-    static final String DEFAULT_LANGUAGE = "ru-RU";
+    /** Used until the user picks a language; never written to the preferences by the app itself. */
+    static final String DEFAULT_LANGUAGE = "en-US";
 
     private static SharedPreferences prefs(Context c) {
         return c.getSharedPreferences("settings", Context.MODE_PRIVATE);
     }
 
+    /** The language the user picked (kept across updates and rebuilds), else {@link #DEFAULT_LANGUAGE}. */
     static String language(Context c) {
-        String v = prefs(c).getString("language", DEFAULT_LANGUAGE);
+        String v = prefs(c).getString("language", null);
         return v == null || v.trim().isEmpty() ? DEFAULT_LANGUAGE : v.trim();
     }
 

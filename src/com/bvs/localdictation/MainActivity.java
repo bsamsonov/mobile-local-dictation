@@ -22,14 +22,20 @@ import android.util.TypedValue;
 import android.view.View;
 import android.view.inputmethod.InputMethodInfo;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Spinner;
 import android.widget.TextView;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 /** Setup + diagnostics screen: permission, enabling the IME, on-device model status/download. */
 public class MainActivity extends Activity {
@@ -37,6 +43,11 @@ public class MainActivity extends Activity {
     private TextView setupStatus;
     private TextView diag;
     private TextView langStatus;
+    private Spinner langSpinner;
+    private EditText langField;
+    private List<Languages.Entry> langEntries = Collections.emptyList();
+    /** Spinner fires selection events when its adapter is set; only a touch makes a selection the user's choice. */
+    private boolean langTouched;
     private SpeechRecognizer probe;
 
     @Override
@@ -61,19 +72,29 @@ public class MainActivity extends Activity {
         col.addView(button(getString(R.string.btn_pick_ime), v -> imm().showInputMethodPicker()));
 
         col.addView(header(getString(R.string.h_language)));
-        EditText lang = new EditText(this);
-        lang.setSingleLine(true);
-        lang.setText(Speech.language(this));
-        lang.addTextChangedListener(new TextWatcher() {
+        col.addView(text(getString(R.string.language_label), 14));
+        langSpinner = new Spinner(this);
+        langSpinner.setOnTouchListener((v, ev) -> { langTouched = true; return false; });
+        langSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view, int pos, long id) { onLanguagePicked(pos); }
+            @Override public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        col.addView(langSpinner);
+        // Fallback when the engine does not report its languages (Android < 13 or an error).
+        langField = new EditText(this);
+        langField.setSingleLine(true);
+        langField.setHint(R.string.language_hint);
+        langField.setText(Speech.language(this));
+        langField.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
             public void onTextChanged(CharSequence s, int a, int b, int c) {}
             public void afterTextChanged(Editable s) { Speech.setLanguage(MainActivity.this, s.toString()); }
         });
-        col.addView(text(getString(R.string.language_label), 14));
-        col.addView(lang);
+        langField.setVisibility(View.GONE);
+        col.addView(langField);
         langStatus = text("", 14);
         col.addView(langStatus);
-        col.addView(button(getString(R.string.btn_check_langs), v -> checkSupport()));
+        col.addView(button(getString(R.string.btn_check_langs), v -> loadLanguages(true)));
         col.addView(button(getString(R.string.btn_download), v -> downloadModel()));
 
         CheckBox auto = new CheckBox(this);
@@ -116,6 +137,7 @@ public class MainActivity extends Activity {
         col.addView(diag);
 
         setContentView(scroll);
+        loadLanguages(false);
     }
 
     @Override
@@ -182,10 +204,11 @@ public class MainActivity extends Activity {
         return probe;
     }
 
-    private void checkSupport() {
-        if (Build.VERSION.SDK_INT < 33) { langStatus.setText(R.string.lang_needs_33); return; }
+    /** Fill the language drop-down from the engine's lists; showLists also prints the raw lists. */
+    private void loadLanguages(boolean showLists) {
+        if (Build.VERSION.SDK_INT < 33) { showLanguageField(getString(R.string.lang_needs_33)); return; }
         if (!SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
-            langStatus.setText(R.string.lang_no_ondevice);
+            showLanguageField(getString(R.string.lang_no_ondevice));
             return;
         }
         langStatus.setText(R.string.lang_checking);
@@ -193,34 +216,82 @@ public class MainActivity extends Activity {
                 new RecognitionSupportCallback() {
                     @Override
                     public void onSupportResult(RecognitionSupport s) {
-                        String lang = Speech.language(MainActivity.this);
-                        boolean installed = containsLang(s.getInstalledOnDeviceLanguages(), lang);
-                        boolean pending = containsLang(s.getPendingOnDeviceLanguages(), lang);
-                        boolean supported = containsLang(s.getSupportedOnDeviceLanguages(), lang);
-                        int state = installed ? R.string.lang_installed : pending ? R.string.lang_pending
-                                : supported ? R.string.lang_supported : R.string.lang_unsupported;
-                        langStatus.setText(lang + ": " + getString(state) + "\n\n"
-                                + getString(R.string.lang_lists, s.getInstalledOnDeviceLanguages(),
-                                s.getPendingOnDeviceLanguages(), s.getSupportedOnDeviceLanguages(),
-                                s.getOnlineLanguages()));
+                        onLanguages(s, showLists);
                     }
 
                     @Override
                     public void onError(int error) {
-                        langStatus.setText(getString(R.string.lang_check_failed, Speech.errorName(error)));
+                        showLanguageField(getString(R.string.lang_check_failed, Speech.errorName(error)));
                     }
                 });
     }
 
-    private static boolean containsLang(List<String> list, String lang) {
-        if (list == null) return false;
-        String want = lang.replace('_', '-').toLowerCase();
-        String wantBase = want.split("-")[0];
-        for (String l : list) {
-            String x = l.replace('_', '-').toLowerCase();
-            if (x.equals(want) || x.equals(wantBase)) return true;
+    private void onLanguages(RecognitionSupport s, boolean showLists) {
+        List<String> installed = s.getInstalledOnDeviceLanguages();
+        List<String> pending = s.getPendingOnDeviceLanguages();
+        List<String> supported = s.getSupportedOnDeviceLanguages();
+        String current = Speech.language(this);
+        List<Languages.Entry> entries = Languages.build(installed, pending, supported, current);
+        if (entries.isEmpty()) { showLanguageField(getString(R.string.lang_none)); return; }
+
+        langEntries = entries;
+        Locale ui = getResources().getConfiguration().getLocales().get(0);
+        List<String> labels = new ArrayList<>();
+        for (Languages.Entry e : entries) {
+            labels.add(stateIcon(e.state) + "  " + Languages.displayName(e.tag, ui) + " · " + e.tag);
         }
-        return false;
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, labels);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        langSpinner.setAdapter(adapter);
+        int sel = Languages.indexOf(entries, current);
+        langSpinner.setSelection(Math.max(sel, 0), false);
+        langSpinner.setVisibility(View.VISIBLE);
+        langField.setVisibility(View.GONE);
+
+        String status = stateLine(entries.get(Math.max(sel, 0)));
+        if (showLists) {
+            status = status + "\n\n" + getString(R.string.lang_lists, installed, pending, supported, s.getOnlineLanguages());
+        }
+        langStatus.setText(status);
+    }
+
+    private void onLanguagePicked(int pos) {
+        if (pos < 0 || pos >= langEntries.size()) return;
+        Languages.Entry e = langEntries.get(pos);
+        if (!langTouched || Languages.norm(e.tag).equals(Languages.norm(Speech.language(this)))) return;
+        Speech.setLanguage(this, e.tag);
+        langField.setText(e.tag);
+        langStatus.setText(stateLine(e));
+    }
+
+    private String stateLine(Languages.Entry e) {
+        String line = e.tag + ": " + getString(stateText(e.state));
+        return e.state == Languages.State.SUPPORTED ? line + "\n" + getString(R.string.lang_needs_download) : line;
+    }
+
+    private void showLanguageField(String status) {
+        langSpinner.setVisibility(View.GONE);
+        langField.setVisibility(View.VISIBLE);
+        langStatus.setText(status);
+    }
+
+    /** Short marker in the drop-down; the full state text is in the status line under it. */
+    private static String stateIcon(Languages.State state) {
+        switch (state) {
+            case INSTALLED: return "✅";
+            case PENDING: return "⏳";
+            case SUPPORTED: return "⬇️";
+            default: return "❌";
+        }
+    }
+
+    private static int stateText(Languages.State state) {
+        switch (state) {
+            case INSTALLED: return R.string.lang_installed;
+            case PENDING: return R.string.lang_pending;
+            case SUPPORTED: return R.string.lang_supported;
+            default: return R.string.lang_unsupported;
+        }
     }
 
     private void downloadModel() {
@@ -234,7 +305,7 @@ public class MainActivity extends Activity {
             langStatus.setText(R.string.dl_requesting);
             probe().triggerModelDownload(intent, getMainExecutor(), new ModelDownloadListener() {
                 @Override public void onProgress(int completedPercent) { langStatus.setText(getString(R.string.dl_progress, completedPercent)); }
-                @Override public void onSuccess() { langStatus.setText(R.string.dl_success); }
+                @Override public void onSuccess() { loadLanguages(false); langStatus.setText(R.string.dl_success); }
                 @Override public void onScheduled() { langStatus.setText(R.string.dl_scheduled); }
                 @Override public void onError(int error) { langStatus.setText(getString(R.string.dl_error, Speech.errorName(error))); }
             });

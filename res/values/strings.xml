@@ -36,7 +36,10 @@
     <string name="setup_active">✅ Currently selected</string>
     <string name="setup_inactive">ℹ️ Another keyboard is selected right now (that\'s fine)</string>
     <string name="h_language">2. Language and model</string>
-    <string name="language_label">Recognition language (BCP-47, e.g. ru-RU, en-US, uk-UA):</string>
+    <string name="language_label">Recognition language:</string>
+    <string name="language_hint">BCP-47 tag, e.g. ru-RU, en-US, uk-UA</string>
+    <string name="lang_none">The engine reported no on-device languages. Enter a language tag:</string>
+    <string name="lang_needs_download">The model for this language is not installed yet. Tap “Download the model for this language”.</string>
     <string name="btn_check_langs">Check on-device languages</string>
     <string name="btn_download">Download the model for this language</string>
     <string name="opt_autostart">Start dictating as soon as the keyboard opens</string>

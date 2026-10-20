@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds build/local-dictation.apk with plain SDK tools (no Gradle).
 # Usage: ./build.sh            -> build
-#        ./build.sh test       -> run TextPost tests (plain JDK, no Android SDK needed)
+#        ./build.sh test       -> run TextPost and Languages tests (plain JDK, no Android SDK needed)
 #        ./build.sh install    -> build + adb install -r
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -15,9 +15,11 @@ KEYTOOL="${JBIN}keytool"
 
 if [ "${1:-}" = "test" ]; then
     rm -rf build/test && mkdir -p build/test
-    "$JAVAC" -encoding UTF-8 -d build/test src/com/bvs/localdictation/TextPost.java \
-        test/com/bvs/localdictation/TextPostTest.java
-    exec "${JBIN}java" -cp build/test com.bvs.localdictation.TextPostTest
+    "$JAVAC" -encoding UTF-8 -d build/test \
+        src/com/bvs/localdictation/TextPost.java src/com/bvs/localdictation/Languages.java \
+        test/com/bvs/localdictation/TextPostTest.java test/com/bvs/localdictation/LanguagesTest.java
+    "${JBIN}java" -cp build/test com.bvs.localdictation.TextPostTest
+    exec "${JBIN}java" -cp build/test com.bvs.localdictation.LanguagesTest
 fi
 
 rm -rf build && mkdir -p build/gen build/classes build/dex
