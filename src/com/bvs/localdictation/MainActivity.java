@@ -49,7 +49,6 @@ public class MainActivity extends Activity {
         col.setPadding(p, p, p, p);
         scroll.addView(col);
 
-        col.addView(text("Local Dictation", 22));
         col.addView(text(getString(R.string.intro), 14));
 
         col.addView(header(getString(R.string.h_setup)));
