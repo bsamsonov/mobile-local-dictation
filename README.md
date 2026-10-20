@@ -11,6 +11,12 @@ Built and tested on a Samsung Galaxy S23 (Android 16), where the on-device engin
 Android System Intelligence (SODA). Russian is the main use case; other languages work if the
 on-device model for them is installed.
 
+<p align="center">
+  <img src="docs/screenshots/1-dictate-offline.png" width="260" alt="Dictating into Samsung Notes in airplane mode">
+  <img src="docs/screenshots/2-keys.png" width="260" alt="The keyboard keys">
+  <img src="docs/screenshots/3-setup.png" width="260" alt="The setup screen">
+</p>
+
 ## Why
 
 I dictate notes on a Samsung phone, and the stock voice input kept getting in the way:
