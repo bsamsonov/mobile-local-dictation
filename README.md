@@ -84,7 +84,7 @@ Languages the engine offers only online are not used: the app never falls back t
 
 ## Install
 
-Download `local-dictation-0.1.0.apk` from [Releases](https://github.com/bsamsonov/mobile-local-dictation/releases/latest)
+Download `local-dictation-0.2.0.apk` from [Releases](https://github.com/bsamsonov/mobile-local-dictation/releases/latest)
 and open it on the phone (allow installing from your browser or file manager when asked). Requires Android 12+.
 The APK is signed with the project's own key, not a Google Play key; updates from Releases install over it.
 To build it yourself, see [Build](#build).

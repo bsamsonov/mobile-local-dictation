@@ -29,7 +29,7 @@ rm -rf build && mkdir -p build/gen build/classes build/dex
 "$BT/aapt2" link -o build/base.apk -I "$PLATFORM" \
     --manifest AndroidManifest.xml --java build/gen \
     --min-sdk-version 31 --target-sdk-version 35 \
-    --version-code 1 --version-name 0.1.0 \
+    --version-code 2 --version-name 0.2.0 \
     build/res.zip
 
 # 2. java -> class -> dex
