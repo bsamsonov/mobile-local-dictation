@@ -22,9 +22,6 @@ I dictate notes on a Samsung phone, and the stock voice input kept getting in th
   "enter" are voice commands, and there is a ↵ key.
 - **Missing punctuation.** Some marks are hard to get by voice, so `,` `.` `?` are one tap away, next to the
   engine's own spoken punctuation.
-- **No sentences from pauses.** Long dictation turns into one endless sentence unless every period is spoken.
-  Splitting into sentences at long pauses is the next planned feature
-  ([#4](https://github.com/bsamsonov/mobile-local-dictation/issues/4)).
 
 ## Features
 
@@ -74,8 +71,6 @@ Languages the engine offers only online are not used: the app never falls back t
 - The engine ends a session on every pause and does not support segmented sessions, so the app restarts sessions;
   continuous capture hides most of the gap, but rare glitches are possible.
 - Digit conversion and the "stop" command are implemented for Russian only.
-- A pause does not end a sentence yet: phrases are joined with a space until you say a period
-  ([#4](https://github.com/bsamsonov/mobile-local-dictation/issues/4)).
 
 ## Build
 
@@ -115,7 +110,7 @@ Requirements: JDK 17+, Android SDK with `platforms;android-35` and `build-tools;
 Behavior is specified with [OpenSpec](https://github.com/Fission-AI/OpenSpec) in [`openspec/`](openspec/):
 [`project.md`](openspec/project.md) (principles, success criteria), current specs in
 [`openspec/specs/`](openspec/specs/) (dictation, keyboard keys, settings, text post-processing) and planned work in
-[`openspec/changes/`](openspec/changes/) (sentence split at pauses, language picker, model download prompt, English terms in Russian speech).
+[`openspec/changes/`](openspec/changes/) (language picker, model download prompt, English terms in Russian speech).
 
 ```bash
 npx @fission-ai/openspec validate --all
