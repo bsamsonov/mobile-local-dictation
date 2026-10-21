@@ -65,4 +65,11 @@
     <string name="dl_scheduled">⏳ Загрузка запланирована системой (часто ждёт Wi-Fi/зарядку)</string>
     <string name="dl_error">Ошибка загрузки: %1$s</string>
     <string name="dl_sent">Запрос на загрузку отправлен — проверьте статус кнопкой выше через минуту</string>
+
+    <!-- Уведомление во время диктовки -->
+    <string name="notif_channel">Диктовка</string>
+    <string name="notif_title">Идёт диктовка…</string>
+    <string name="notif_text">Сказанное при заблокированном экране вставится после разблокировки</string>
+    <string name="notif_stop">Стоп</string>
+    <string name="status_bg_clipboard">Текст, сказанный при блокировке, скопирован в буфер обмена</string>
 </resources>

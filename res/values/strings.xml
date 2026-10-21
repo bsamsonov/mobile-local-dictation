@@ -68,4 +68,11 @@
     <string name="dl_scheduled">⏳ Download scheduled by the system (often waits for Wi-Fi or charging)</string>
     <string name="dl_error">Download error: %1$s</string>
     <string name="dl_sent">Download requested. Check the status with the button above in a minute.</string>
+
+    <!-- Notification while dictating -->
+    <string name="notif_channel">Dictation</string>
+    <string name="notif_title">Dictating…</string>
+    <string name="notif_text">Text said while the screen is locked is inserted after unlock</string>
+    <string name="notif_stop">Stop</string>
+    <string name="status_bg_clipboard">Text said while locked was copied to the clipboard</string>
 </resources>

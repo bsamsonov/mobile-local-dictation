@@ -3,6 +3,10 @@
     package="com.bvs.localdictation">
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Keep the microphone on while the screen is locked during dictation -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Android 11+: package visibility for RecognitionService lookup (diagnostics) -->
     <queries>
@@ -39,5 +43,10 @@
                 android:name="android.view.im"
                 android:resource="@xml/method" />
         </service>
+
+        <service
+            android:name=".MicService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
     </application>
 </manifest>

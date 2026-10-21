@@ -1,7 +1,13 @@
 package com.bvs.localdictation;
 
 import android.Manifest;
+import android.app.KeyguardManager;
+import android.content.BroadcastReceiver;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -11,6 +17,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
+import android.os.PowerManager;
 import android.os.SystemClock;
 import android.os.Build;
 import android.speech.RecognizerIntent;
@@ -24,6 +31,7 @@ import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
+import android.text.InputType;
 import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
@@ -39,7 +47,8 @@ import java.util.ArrayList;
  * whatever app is focused: partial results as composing (underlined) text, final
  * results committed.
  */
-public class DictationIME extends InputMethodService implements RecognitionListener {
+public class DictationIME extends InputMethodService
+        implements RecognitionListener, MicService.StopListener {
 
     private static final String TAG = "LocalDictation";
 
@@ -87,6 +96,20 @@ public class DictationIME extends InputMethodService implements RecognitionListe
     private String segmentPrefix = "";
     private boolean segmentCapitalize;
 
+    // Screen locked during dictation: recognized text is held here instead of being typed into
+    // whatever window has input now (the lock screen), and inserted after unlock.
+    private boolean locked;
+    private String lockedPackage;
+    /** Text before the cursor when the screen locked, for spacing/capitalisation of held text. */
+    private String lockedBefore = "";
+    private final StringBuilder held = new StringBuilder();
+    private final BroadcastReceiver unlockReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) {
+            Log.d(TAG, "user present, locked=" + locked);
+            handler.postDelayed(() -> resumeAfterLock(getCurrentInputEditorInfo()), 700);
+        }
+    };
+
     private TextView status;
     private Button mic;
 
@@ -99,6 +122,7 @@ public class DictationIME extends InputMethodService implements RecognitionListe
         // that is a request to dictate, so a remembered stop no longer applies.
         // Screen lock/unlock and moving between fields keep the service, so a stop is kept there.
         Speech.setStoppedByUser(this, false);
+        registerReceiver(unlockReceiver, new IntentFilter(Intent.ACTION_USER_PRESENT));
     }
 
     @Override
@@ -187,9 +211,17 @@ public class DictationIME extends InputMethodService implements RecognitionListe
     // ---------------------------------------------------------------- lifecycle
 
     @Override
+    public void onStartInput(EditorInfo info, boolean restarting) {
+        super.onStartInput(info, restarting);
+        Log.d(TAG, "onStartInput restarting=" + restarting + " pkg=" + info.packageName + " locked=" + locked);
+        resumeAfterLock(info);
+    }
+
+    @Override
     public void onStartInputView(EditorInfo info, boolean restarting) {
         super.onStartInputView(info, restarting);
         Log.d(TAG, "onStartInputView restarting=" + restarting + " pkg=" + info.packageName);
+        resumeAfterLock(info);
         consecutiveErrors = 0;
         handler.removeCallbacks(autoStart);
         // A stop by the user is remembered (screen lock/unlock, other fields): no auto-start until Dictate is tapped.
@@ -201,12 +233,83 @@ public class DictationIME extends InputMethodService implements RecognitionListe
 
     @Override
     public void onFinishInputView(boolean finishingInput) {
-        haltListening();
+        Log.d(TAG, "onFinishInputView listening=" + listening + " screenLocked=" + screenLocked());
+        if (listening && !locked && screenLocked()) enterLocked();
+        else if (!locked) haltListening();
         super.onFinishInputView(finishingInput);
+    }
+
+    private boolean screenLocked() {
+        PowerManager pm = getSystemService(PowerManager.class);
+        KeyguardManager km = getSystemService(KeyguardManager.class);
+        return !pm.isInteractive() || km.isKeyguardLocked();
+    }
+
+    /** Screen locked while dictating: keep listening, hold the text until unlock. */
+    private void enterLocked() {
+        locked = true;
+        EditorInfo ei = getCurrentInputEditorInfo();
+        lockedPackage = ei == null ? null : ei.packageName;
+        held.setLength(0);
+        InputConnection ic = getCurrentInputConnection();
+        lockedBefore = "";
+        if (ic != null) {
+            // Drop the composing partial: the final result of this phrase goes to the held text.
+            ic.setComposingText("", 1);
+            ic.finishComposingText();
+            CharSequence b = ic.getTextBeforeCursor(64, 0);
+            lockedBefore = b == null ? "" : b.toString();
+        }
+        segmentStarted = false;
+        Log.d(TAG, "screen locked: dictation continues, pkg=" + lockedPackage);
+    }
+
+    /** Input is back after a lock: insert held text into the same app, or give it to the clipboard. */
+    private void resumeAfterLock(EditorInfo info) {
+        if (!locked || screenLocked()) return;
+        if (info == null || info.inputType == InputType.TYPE_NULL) return;   // no editor yet
+        InputConnection ic = getCurrentInputConnection();
+        boolean same = ic != null && info.packageName != null && info.packageName.equals(lockedPackage);
+        locked = false;
+        String text = held.toString();
+        held.setLength(0);
+        Log.d(TAG, "unlocked: same app=" + same + ", held " + text.length() + " chars");
+        if (same) {
+            if (!text.isEmpty()) ic.commitText(text, 1);
+            segmentStarted = false;
+            updateUi(listening ? getString(R.string.status_ready, Speech.language(this)) : null);
+            return;
+        }
+        haltListening();
+        if (!text.isEmpty()) {
+            ClipboardManager cm = getSystemService(ClipboardManager.class);
+            cm.setPrimaryClip(ClipData.newPlainText(getString(R.string.app_name), text));
+            updateUi(getString(R.string.status_bg_clipboard));
+        }
+    }
+
+    /** Stop tapped in the notification. */
+    @Override
+    public void onStopFromNotification() {
+        if (!listening) return;
+        listening = false;
+        Speech.setStoppedByUser(this, true);
+        stopFeeder();
+        handler.removeCallbacksAndMessages(null);
+        // stopListening() still delivers onResults for what was already said.
+        if (recognizer != null) recognizer.stopListening();
+        updateUi(getString(R.string.status_stopped));
+    }
+
+    /** Where recognized text goes now: null while the screen is locked (text is held instead). */
+    private InputConnection target() {
+        return locked ? null : getCurrentInputConnection();
     }
 
     @Override
     public void onDestroy() {
+        unregisterReceiver(unlockReceiver);
+        locked = false;
         stopFeeder();
         haltListening();
         if (recognizer != null) {
@@ -226,6 +329,7 @@ public class DictationIME extends InputMethodService implements RecognitionListe
             handler.removeCallbacksAndMessages(null);
             // stopListening() still delivers onResults for what was already said.
             if (recognizer != null) recognizer.stopListening();
+            MicService.stop(this);
             updateUi(getString(R.string.status_stopped));
         } else {
             consecutiveErrors = 0;
@@ -253,6 +357,7 @@ public class DictationIME extends InputMethodService implements RecognitionListe
         }
         replayFrom = SystemClock.elapsedRealtime();
         listening = true;
+        MicService.start(this, this);
         busyRetries = 0;
         beginSession();
     }
@@ -284,10 +389,11 @@ public class DictationIME extends InputMethodService implements RecognitionListe
     /** Hard stop (keyboard hidden): keep whatever partial text is already shown. */
     private void haltListening() {
         listening = false;
+        MicService.stop(this);
         stopFeeder();
         handler.removeCallbacksAndMessages(null);
         if (recognizer != null) recognizer.cancel();
-        InputConnection ic = getCurrentInputConnection();
+        InputConnection ic = target();
         if (ic != null) ic.finishComposingText();
         segmentStarted = false;
         updateUi(null);
@@ -343,8 +449,13 @@ public class DictationIME extends InputMethodService implements RecognitionListe
 
     /** Decide leading space / capitalisation from the text before the cursor. */
     private void decideSegmentFormat(InputConnection ic) {
-        CharSequence before = ic.getTextBeforeCursor(64, 0);
-        String b = before == null ? "" : before.toString();
+        String b;
+        if (ic == null) {
+            b = lockedBefore + held;
+        } else {
+            CharSequence before = ic.getTextBeforeCursor(64, 0);
+            b = before == null ? "" : before.toString();
+        }
         String trimmed = b.replaceAll("\\s+$", "");
         boolean endsWithSpace = !b.isEmpty() && Character.isWhitespace(b.charAt(b.length() - 1));
         segmentPrefix = (b.isEmpty() || endsWithSpace) ? "" : " ";
@@ -419,10 +530,11 @@ public class DictationIME extends InputMethodService implements RecognitionListe
         String text = best(partialResults);
         Log.d(TAG, "partial: " + text.length() + " chars");
         handler.removeCallbacks(watchdog);
-        InputConnection ic = getCurrentInputConnection();
-        if (ic == null || text.trim().isEmpty()) return;
-        if (!segmentStarted) decideSegmentFormat(ic);
+        if (text.trim().isEmpty()) return;
         lastPartial = text;
+        InputConnection ic = target();
+        if (ic == null) return;   // locked: the final result goes to the held text
+        if (!segmentStarted) decideSegmentFormat(ic);
         ic.setComposingText(format(text), 1);
     }
 
@@ -452,7 +564,7 @@ public class DictationIME extends InputMethodService implements RecognitionListe
         markHandoff();
         Log.d(TAG, "endOfSegmentedSession listening=" + listening);
         handler.removeCallbacks(watchdog);
-        InputConnection ic = getCurrentInputConnection();
+        InputConnection ic = target();
         if (ic != null) ic.finishComposingText();
         segmentStarted = false;
         if (listening) restartSoon(100);
@@ -472,8 +584,13 @@ public class DictationIME extends InputMethodService implements RecognitionListe
         String beforeStop = Speech.isRussian(this) && Speech.voiceCommands(this) ? TextPost.stripStop(text) : null;
         boolean stopCommand = beforeStop != null;
         if (stopCommand) text = beforeStop;
-        InputConnection ic = getCurrentInputConnection();
-        if (ic != null) {
+        InputConnection ic = target();
+        if (locked) {
+            if (!text.trim().isEmpty()) {
+                if (!segmentStarted) decideSegmentFormat(null);
+                held.append(format(text));
+            }
+        } else if (ic != null) {
             if (!text.trim().isEmpty()) {
                 if (!segmentStarted) decideSegmentFormat(ic);
                 ic.commitText(format(text), 1); // replaces the composing partial text
@@ -487,6 +604,7 @@ public class DictationIME extends InputMethodService implements RecognitionListe
         if (stopCommand) {
             listening = false;
             Speech.setStoppedByUser(this, true);
+            MicService.stop(this);
             stopFeeder();
             handler.removeCallbacksAndMessages(null);
             if (recognizer != null) recognizer.cancel();
@@ -513,7 +631,7 @@ public class DictationIME extends InputMethodService implements RecognitionListe
             return;
         }
         lastPartial = "";
-        InputConnection ic = getCurrentInputConnection();
+        InputConnection ic = target();
         if (ic != null) ic.finishComposingText();
         segmentStarted = false;
         if (!listening) { updateUi(null); return; }
@@ -530,6 +648,7 @@ public class DictationIME extends InputMethodService implements RecognitionListe
                 // ("capacity is full"). Rebind and back off instead of giving up quickly.
                 if (++busyRetries > 20) {
                     listening = false;
+                    MicService.stop(this);
                     stopFeeder();
                     updateUi(getString(R.string.status_busy_giveup));
                     return;
@@ -541,11 +660,13 @@ public class DictationIME extends InputMethodService implements RecognitionListe
             case SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED:
             case SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE:
                 listening = false;
+                MicService.stop(this);
                 stopFeeder();
                 updateUi(getString(R.string.status_model_missing, Speech.language(this)));
                 return;
             case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
                 listening = false;
+                MicService.stop(this);
                 stopFeeder();
                 updateUi(getString(R.string.status_no_mic));
                 return;
@@ -558,6 +679,7 @@ public class DictationIME extends InputMethodService implements RecognitionListe
         }
         if (++consecutiveErrors >= 5) {
             listening = false;
+            MicService.stop(this);
             stopFeeder();
             updateUi(getString(R.string.status_error_giveup, Speech.errorName(error)));
             return;

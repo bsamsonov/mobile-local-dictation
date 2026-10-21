@@ -68,7 +68,8 @@ public class MainActivity extends Activity {
         setupStatus = text("", 14);
         col.addView(setupStatus);
         col.addView(button(getString(R.string.btn_grant_mic), v ->
-                requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 1)));
+                requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO,
+                        Manifest.permission.POST_NOTIFICATIONS}, 1)));
         col.addView(button(getString(R.string.btn_enable_ime), v ->
                 startActivity(new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))));
         col.addView(button(getString(R.string.btn_pick_ime), v -> imm().showInputMethodPicker()));
