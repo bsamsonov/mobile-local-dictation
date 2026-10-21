@@ -33,9 +33,8 @@ I dictate notes on a Samsung phone, and the stock voice input kept getting in th
 
 - Dictation into any text field; partial results appear as composing text, final results are committed.
 - Continuous dictation: after each pause the recognition session restarts automatically until you press Stop.
-- Continuous microphone capture (Android 13+, experimental, off by default): the app records the mic itself and feeds
-  the audio to the engine (`EXTRA_AUDIO_SOURCE`) with a short replay buffer. On Google's engine it makes every session end
-  with an error before the final result, so phrase endings get cut off ([#8](https://github.com/bsamsonov/mobile-local-dictation/issues/8)).
+- Continuous microphone capture (Android 13+): the app records the mic itself and feeds the audio to the
+  engine (`EXTRA_AUDIO_SOURCE`) with a short replay buffer, so words spoken while a new session starts are not lost.
 - Recovery from a stalled or busy recognizer (watchdog, recreate + back-off).
 - Keys for what voice does badly: line break, punctuation, settings, back to your regular keyboard (see [Keys](#keys)).
 - Punctuation by voice ("comma", "period") is done by the engine itself (formatting, Android 13+).
@@ -80,7 +79,7 @@ Languages the engine offers only online are not used: the app never falls back t
 - Depends on the firmware: the device must provide an on-device recognition service and a model for your language.
   Samsung's own engine is not available to third-party apps.
 - The engine ends a session on every pause and does not support segmented sessions, so the app restarts sessions;
-  words said in the short gap between sessions may be lost.
+  continuous capture hides most of the gap, but rare glitches are possible.
 - Digit conversion and the "stop" command are implemented for Russian only.
 
 ## Install
