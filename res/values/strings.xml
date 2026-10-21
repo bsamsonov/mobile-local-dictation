@@ -48,7 +48,7 @@
     <string name="opt_formatting">Ask the model for punctuation (Android 13+; turn off if you see errors)</string>
     <string name="opt_commands">Voice commands: “new line”, “new paragraph”, “enter” (any language); “stop” at the end of a phrase (Russian only)</string>
     <string name="opt_digits">Numbers as digits (Russian only; single numbers one…nine stay words)</string>
-    <string name="opt_continuous">Continuous microphone capture (don’t lose words between phrases; Android 13+)</string>
+    <string name="opt_continuous">Continuous microphone capture (experimental, Android 13+: may cut off the end of phrases)</string>
     <string name="h_try">3. Try it</string>
     <string name="try_text">Tap the field below and switch to “On-device voice input” (keyboard button in the navigation bar, or the button above).</string>
     <string name="try_hint">Dictate here…</string>

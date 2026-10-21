@@ -54,8 +54,11 @@ final class Speech {
 
     static void setDigits(Context c, boolean v) { prefs(c).edit().putBoolean("digits", v).apply(); }
 
-    /** Own continuous mic capture fed to the engine (Android 13+), avoids losing words between phrases. */
-    static boolean continuousAudio(Context c) { return prefs(c).getBoolean("continuousAudio", true); }
+    /**
+     * Own continuous mic capture fed to the engine (Android 13+). Off by default: with it the on-device
+     * engine ends every session with ERROR_CLIENT before the final result, cutting phrases off (#8).
+     */
+    static boolean continuousAudio(Context c) { return prefs(c).getBoolean("continuousAudio", false); }
 
     static void setContinuousAudio(Context c, boolean v) { prefs(c).edit().putBoolean("continuousAudio", v).apply(); }
 
