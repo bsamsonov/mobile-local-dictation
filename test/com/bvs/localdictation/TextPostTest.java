@@ -72,6 +72,22 @@ public class TextPostTest {
             boolean got = TextPost.isNewPhrase(c[0], c[1]);
             if (got != c[2].equals("1")) { fail++; System.out.println("FAIL phrase: [" + c[0] + "] -> [" + c[1] + "] got " + got); }
         }
+        // {last partial, final result, expected text to commit}
+        String[][] fin = {
+                {"Если я начинаю говорить, то пауза", "Если я н", "Если я начинаю говорить, то пауза"},
+                {"Если я начинаю говорить", "говорить", "Если я начинаю говорить"},
+                {"привет как как дела", "Привет, как дела.", "Привет, как дела."},
+                {"Новая стро.", "Новая строка.", "Новая строка."},
+                {"", "abc", "abc"},
+                {"abc", "", "abc"},
+        };
+        for (String[] c : fin) {
+            String got = TextPost.pickFinal(c[0], c[1]);
+            if (!got.equals(c[2])) { fail++; System.out.println("FAIL final: [" + c[0] + "] + [" + c[1] + "] -> [" + got + "]"); }
+        }
+        if (!TextPost.coveredBy("Если я начинаю говорить, то", "начинаю говорить")) { fail++; System.out.println("FAIL covered: inside"); }
+        if (TextPost.coveredBy("Если я начинаю говорить", "и потом ещё")) { fail++; System.out.println("FAIL covered: new text"); }
+        if (TextPost.coveredBy("abc", "")) { fail++; System.out.println("FAIL covered: empty"); }
         System.out.println(fail == 0 ? "ALL OK" : fail + " failed");
         if (fail > 0) System.exit(1);
     }

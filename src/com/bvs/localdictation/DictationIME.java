@@ -78,6 +78,12 @@ public class DictationIME extends InputMethodService
      * phrase arrive within ~150 ms; observed new phrases after 1.1-2.9 s.
      */
     private static final long NEW_PHRASE_GAP_MS = 600;
+    /**
+     * Text committed from the partial because the engine's final covered only a piece of it, and when.
+     * A later final for the same phrase that is inside this text is dropped instead of typed twice.
+     */
+    private String partialCommitted = "";
+    private long partialCommittedAt;
     private final Runnable feederCheck = () -> {
         if (feeder != null && feeder.isBlocked() && listening) {
             Log.w(TAG, "engine does not read EXTRA_AUDIO_SOURCE; falling back to its own mic");
@@ -558,6 +564,15 @@ public class DictationIME extends InputMethodService
         return segmentPrefix + t;
     }
 
+    /** Lengths of all hypotheses, e.g. "[8, 7]" (no text, see log privacy). */
+    private static String hypLengths(Bundle b) {
+        ArrayList<String> list = b == null ? null : b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+        if (list == null) return "[]";
+        StringBuilder sb = new StringBuilder("[");
+        for (String h : list) sb.append(sb.length() > 1 ? ", " : "").append(h == null ? 0 : h.length());
+        return sb.append(']').toString();
+    }
+
     private static String best(Bundle b) {
         if (b == null) return "";
         ArrayList<String> list = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
@@ -626,7 +641,7 @@ public class DictationIME extends InputMethodService
 
     @Override
     public void onResults(Bundle results) {
-        Log.d(TAG, "results: " + best(results).length() + " chars");
+        Log.d(TAG, "results: " + hypLengths(results) + " chars");
         markHandoff();
         if (!commitFinal(results)) return;
         // Non-segmented mode. The engine may still deliver a second result for the same
@@ -641,7 +656,7 @@ public class DictationIME extends InputMethodService
     /** Segmented mode (Android 13+): one finished phrase; the session keeps listening. */
     @Override
     public void onSegmentResults(Bundle segmentResults) {
-        Log.d(TAG, "segment: " + best(segmentResults).length() + " chars");
+        Log.d(TAG, "segment: " + hypLengths(segmentResults) + " chars");
         commitFinal(segmentResults);
     }
 
@@ -666,10 +681,26 @@ public class DictationIME extends InputMethodService
         // No markHandoff() here: phrases are also committed in the middle of a live session
         // (segment results, a new phrase), and moving the replay point there would make the next
         // session re-recognize audio that was already typed.
+        String partial = lastPartial;
         lastPartial = "";
         consecutiveErrors = 0;
         handler.removeCallbacks(watchdog);
         String text = best(results);
+        long now = SystemClock.elapsedRealtime();
+        if (partial.trim().isEmpty() && now - partialCommittedAt < 1500
+                && TextPost.coveredBy(partialCommitted, text)) {
+            Log.d(TAG, "final already typed from the partial: dropped (" + text.length() + " chars)");
+            return true;
+        }
+        String chosen = TextPost.pickFinal(partial, text);
+        if (chosen != text) {
+            // The engine's final covers only a piece of what it showed; typing it would erase the rest.
+            Log.d(TAG, "final " + text.length() + " chars is a piece of the partial "
+                    + partial.length() + " chars: committing the partial");
+            partialCommitted = chosen;
+            partialCommittedAt = now;
+            text = chosen;
+        }
         String beforeStop = Speech.isRussian(this) && Speech.voiceCommands(this) ? TextPost.stripStop(text) : null;
         boolean stopCommand = beforeStop != null;
         if (stopCommand) text = beforeStop;

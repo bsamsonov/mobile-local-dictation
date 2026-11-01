@@ -45,6 +45,23 @@ final class TextPost {
         return common * 2 < n;
     }
 
+    /**
+     * The text to commit for a phrase: the engine's final result, unless it is much shorter than the
+     * last partial result shown for the same phrase. The engine sometimes returns a final result for
+     * only a piece of what it showed (observed: 43 characters of partial text, final of 8), and
+     * committing it would erase the rest. Less than 60% of the letters means a piece.
+     */
+    static String pickFinal(String partial, String fin) {
+        String p = partial == null ? "" : partial, f = fin == null ? "" : fin;
+        return letters(f).length() * 10 < letters(p).length() * 6 ? p : f;
+    }
+
+    /** True if the letters and digits of {@code text} (non-empty) occur in {@code committed}. */
+    static boolean coveredBy(String committed, String text) {
+        String t = letters(text);
+        return !t.isEmpty() && letters(committed).contains(t);
+    }
+
     private static String letters(String s) {
         if (s == null) return "";
         StringBuilder b = new StringBuilder();

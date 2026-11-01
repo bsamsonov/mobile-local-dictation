@@ -18,3 +18,18 @@ next session.
 - **GIVEN** the composing text is "hello world"
 - **WHEN** 100 ms later the engine sends the partial "hello word"
 - **THEN** the composing text becomes "hello word" and nothing is committed
+
+### Requirement: Final result shorter than the shown text
+If the engine's final result for a phrase has less than 60% of the letters and digits of the last partial result shown
+for it, the keyboard SHALL commit that partial result instead. A final result that arrives within 1.5 s after this,
+with no partial in between, and whose text is contained in the committed partial SHALL be dropped.
+
+#### Scenario: Final covers only the beginning
+- **GIVEN** the composing text is "if I start talking then pause"
+- **WHEN** the engine's final result is "if I s"
+- **THEN** "if I start talking then pause" is committed
+
+#### Scenario: Normal correction kept
+- **GIVEN** the composing text is "hello how how are you"
+- **WHEN** the engine's final result is "Hello, how are you."
+- **THEN** "Hello, how are you." is committed
