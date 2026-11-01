@@ -5,6 +5,8 @@
 
     <string name="key_space">пробел</string>
     <string name="key_settings">Настройки</string>
+    <string name="key_source_phone">Микрофон: телефон</string>
+    <string name="key_source_headset">Микрофон: гарнитура</string>
     <string name="mic_start">🎤  Диктовать</string>
     <string name="mic_stop">■  Стоп</string>
     <string name="status_idle">Локально · %1$s · нажмите «Диктовать»</string>
@@ -22,6 +24,8 @@
     <string name="status_model_missing">Модель «%1$s» не установлена на устройстве. Откройте Local Dictation → «Скачать модель».</string>
     <string name="status_error_retry">Ошибка %1$s, перезапуск…</string>
     <string name="status_error_giveup">Ошибка распознавания: %1$s. Нажмите «Диктовать» ещё раз.</string>
+    <string name="status_no_headset">🎧 не подключена, микрофон телефона</string>
+    <string name="status_no_headset_idle">🎧 Bluetooth-гарнитура не подключена: пока она не подключится, будет микрофон телефона</string>
 
     <string name="intro">Голосовая «клавиатура», которая распознаёт речь ТОЛЬКО локальной моделью устройства (без облака, даже при включённом интернете) и вставляет текст туда, где стоит курсор.</string>
     <string name="h_setup">1. Настройка</string>

@@ -59,6 +59,11 @@ final class Speech {
 
     static void setContinuousAudio(Context c, boolean v) { prefs(c).edit().putBoolean("continuousAudio", v).apply(); }
 
+    /** Record from a Bluetooth headset instead of the phone's microphone. */
+    static boolean headsetMic(Context c) { return prefs(c).getBoolean("headsetMic", false); }
+
+    static void setHeadsetMic(Context c, boolean v) { prefs(c).edit().putBoolean("headsetMic", v).apply(); }
+
     static Intent recognizeIntent(Context c) {
         Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);

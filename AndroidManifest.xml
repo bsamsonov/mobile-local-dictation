@@ -3,6 +3,8 @@
     package="com.bvs.localdictation">
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Select a Bluetooth headset (SCO / LE Audio) as the microphone -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Keep the microphone on while the screen is locked during dictation -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />

@@ -70,6 +70,7 @@ Languages the engine offers only online are not used: the app never falls back t
 | 🎤 Dictate / ■ Stop | Start continuous dictation / stop it |
 | ⌨ | Stop dictation and return to the previous (regular) keyboard; long press opens the keyboard picker |
 | ⚙ | Stop dictation and open the settings screen |
+| 📱 / 🎧 | Microphone: phone or Bluetooth headset (the app opens the headset's SCO / LE Audio link while dictating and releases it on stop) |
 | ↵ | Line break (sends Enter to the field) |
 | `,` `.` `?` | Insert the punctuation mark at the cursor |
 | space, ⌫ | Space and backspace |

@@ -7,6 +7,8 @@
     <!-- Keyboard -->
     <string name="key_space">space</string>
     <string name="key_settings">Settings</string>
+    <string name="key_source_phone">Microphone: phone</string>
+    <string name="key_source_headset">Microphone: headset</string>
     <string name="mic_start">🎤  Dictate</string>
     <string name="mic_stop">■  Stop</string>
     <string name="status_idle">On-device · %1$s · tap “Dictate”</string>
@@ -24,6 +26,8 @@
     <string name="status_model_missing">The “%1$s” model is not installed. Open Local Dictation → “Download model”.</string>
     <string name="status_error_retry">Error %1$s, restarting…</string>
     <string name="status_error_giveup">Recognition error: %1$s. Tap “Dictate” again.</string>
+    <string name="status_no_headset">🎧 not connected, phone mic</string>
+    <string name="status_no_headset_idle">🎧 No Bluetooth headset connected: the phone microphone will be used until one connects</string>
 
     <!-- Setup screen -->
     <string name="intro">A voice keyboard that recognizes speech ONLY with the device\'s on-device model (no cloud, even when online) and inserts the text at the cursor.</string>

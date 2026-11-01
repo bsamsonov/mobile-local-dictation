@@ -1,5 +1,6 @@
 package com.bvs.localdictation;
 
+import android.media.AudioDeviceInfo;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
@@ -49,7 +50,8 @@ final class AudioFeeder {
     /** Set when the pipe is full, i.e. the engine is not reading our audio. */
     private volatile boolean blocked;
 
-    boolean start() {
+    /** Starts recording; {@code input} is the preferred microphone (null: the system picks). */
+    boolean start(AudioDeviceInfo input) {
         int min = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
         try {
             rec = new AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, RATE,
@@ -63,11 +65,12 @@ final class AudioFeeder {
             rec = null;
             return false;
         }
+        if (input != null && !rec.setPreferredDevice(input)) Log.w(TAG, "preferred input not set");
         rec.startRecording();
         running = true;
         thread = new Thread(this::loop, "AudioFeeder");
         thread.start();
-        Log.d(TAG, "feeder started");
+        Log.d(TAG, "feeder started, input type=" + (input == null ? -1 : input.getType()));
         return true;
     }
 

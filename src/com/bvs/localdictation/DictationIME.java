@@ -110,8 +110,14 @@ public class DictationIME extends InputMethodService
         }
     };
 
+    /** Phone microphone or Bluetooth headset (SCO / LE Audio) for the dictation audio. */
+    private AudioRoute route;
+    /** Incremented on every route setup, so a late "link is up" of an older setup is ignored. */
+    private int routeGen;
+
     private TextView status;
     private Button mic;
+    private Button source;
 
     // ---------------------------------------------------------------- UI
 
@@ -122,6 +128,7 @@ public class DictationIME extends InputMethodService
         // that is a request to dictate, so a remembered stop no longer applies.
         // Screen lock/unlock and moving between fields keep the service, so a stop is kept there.
         Speech.setStoppedByUser(this, false);
+        route = new AudioRoute(this, this::onHeadsetsChanged);
         registerReceiver(unlockReceiver, new IntentFilter(Intent.ACTION_USER_PRESENT));
     }
 
@@ -158,6 +165,10 @@ public class DictationIME extends InputMethodService
         gear.setContentDescription(getString(R.string.key_settings));
         gear.setOnClickListener(v -> openSettings());
         row2.addView(gear, weight(1));
+        source = key("", v -> toggleSource());
+        source.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        source.setPadding(0, 0, 0, 0);
+        row2.addView(source, weight(1));
         row2.addView(key(",", v -> commitRaw(",")), weight(1));
         row2.addView(key(".", v -> commitRaw(".")), weight(1));
         row2.addView(key("?", v -> commitRaw("?")), weight(1));
@@ -202,6 +213,9 @@ public class DictationIME extends InputMethodService
 
     private void updateUi(String msg) {
         if (mic == null) return;
+        boolean headset = Speech.headsetMic(this);
+        source.setText(headset ? "🎧" : "📱");
+        source.setContentDescription(getString(headset ? R.string.key_source_headset : R.string.key_source_phone));
         mic.setText(listening ? R.string.mic_stop : R.string.mic_start);
         mic.setTextColor(listening ? Color.rgb(229, 57, 53) : Color.BLACK);
         if (msg != null) status.setText(msg);
@@ -277,7 +291,7 @@ public class DictationIME extends InputMethodService
         if (same) {
             if (!text.isEmpty()) ic.commitText(text, 1);
             segmentStarted = false;
-            updateUi(listening ? getString(R.string.status_ready, Speech.language(this)) : null);
+            updateUi(listening ? readyStatus() : null);
             return;
         }
         haltListening();
@@ -295,6 +309,7 @@ public class DictationIME extends InputMethodService
         listening = false;
         Speech.setStoppedByUser(this, true);
         stopFeeder();
+        route.release();
         handler.removeCallbacksAndMessages(null);
         // stopListening() still delivers onResults for what was already said.
         if (recognizer != null) recognizer.stopListening();
@@ -310,8 +325,8 @@ public class DictationIME extends InputMethodService
     public void onDestroy() {
         unregisterReceiver(unlockReceiver);
         locked = false;
-        stopFeeder();
         haltListening();
+        route.release();
         if (recognizer != null) {
             recognizer.destroy();
             recognizer = null;
@@ -330,6 +345,7 @@ public class DictationIME extends InputMethodService
             // stopListening() still delivers onResults for what was already said.
             if (recognizer != null) recognizer.stopListening();
             MicService.stop(this);
+            route.release();
             updateUi(getString(R.string.status_stopped));
         } else {
             consecutiveErrors = 0;
@@ -351,15 +367,69 @@ public class DictationIME extends InputMethodService
             recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(this);
             recognizer.setRecognitionListener(this);
         }
-        if (feeder == null && !feederUnsupported && Build.VERSION.SDK_INT >= 33 && Speech.continuousAudio(this)) {
-            feeder = new AudioFeeder();
-            if (!feeder.start()) feeder = null;
-        }
-        replayFrom = SystemClock.elapsedRealtime();
         listening = true;
         MicService.start(this, this);
         busyRetries = 0;
-        beginSession();
+        openMic();
+    }
+
+    /** Sets up the audio route (phone or headset), then starts own capture and the first session. */
+    private void openMic() {
+        updateUi(getString(R.string.status_connecting));
+        final int gen = ++routeGen;
+        route.apply(Speech.headsetMic(this), () -> {
+            if (!listening || gen != routeGen) return;
+            if (feeder == null && !feederUnsupported && Build.VERSION.SDK_INT >= 33 && Speech.continuousAudio(this)) {
+                feeder = new AudioFeeder();
+                if (!feeder.start(route.inputDevice())) feeder = null;
+            }
+            replayFrom = SystemClock.elapsedRealtime();
+            beginSession();
+        });
+    }
+
+    /** Microphone key: phone <-> headset. A running dictation goes on from the new source. */
+    private void toggleSource() {
+        boolean headset = !Speech.headsetMic(this);
+        Speech.setHeadsetMic(this, headset);
+        Log.d(TAG, "source: " + (headset ? "headset" : "phone"));
+        if (listening) reroute();
+        else updateUi(headset && route.findHeadset() == null ? getString(R.string.status_no_headset_idle) : null);
+    }
+
+    /** A headset connected or disconnected while dictating. */
+    private void onHeadsetsChanged() {
+        if (listening && route.needsReroute(Speech.headsetMic(this))) {
+            Log.d(TAG, "headsets changed: rerouting");
+            reroute();
+        }
+    }
+
+    /** Restarts capture and the session on the current route, keeping dictation on. */
+    private void reroute() {
+        handler.removeCallbacksAndMessages(null);
+        if (!lastPartial.trim().isEmpty() && !commitPartialAsFinal()) return;   // spoken "stop"
+        InputConnection ic = target();
+        if (ic != null) ic.finishComposingText();
+        segmentStarted = false;
+        stopFeeder();
+        recreateRecognizer();
+        openMic();
+    }
+
+    private void releaseMic() {
+        MicService.stop(this);
+        stopFeeder();
+        route.release();
+    }
+
+    /** Ready status, with the headset in use (or its absence) when the headset source is chosen. */
+    private String readyStatus() {
+        String s = getString(R.string.status_ready, Speech.language(this));
+        if (!Speech.headsetMic(this)) return s;
+        if (route.headset() == null) return s + " · " + getString(R.string.status_no_headset);
+        String n = route.headsetName();
+        return s + " · 🎧 " + (n.isEmpty() ? "Bluetooth" : n);
     }
 
     private void beginSession() {
@@ -389,8 +459,7 @@ public class DictationIME extends InputMethodService
     /** Hard stop (keyboard hidden): keep whatever partial text is already shown. */
     private void haltListening() {
         listening = false;
-        MicService.stop(this);
-        stopFeeder();
+        releaseMic();
         handler.removeCallbacksAndMessages(null);
         if (recognizer != null) recognizer.cancel();
         InputConnection ic = target();
@@ -508,7 +577,7 @@ public class DictationIME extends InputMethodService
         handler.removeCallbacks(watchdog);
         busyRetries = 0;
         consecutiveErrors = 0;
-        updateUi(getString(R.string.status_ready, Speech.language(this)));
+        updateUi(readyStatus());
     }
 
     @Override public void onBeginningOfSpeech() {
@@ -604,14 +673,21 @@ public class DictationIME extends InputMethodService
         if (stopCommand) {
             listening = false;
             Speech.setStoppedByUser(this, true);
-            MicService.stop(this);
-            stopFeeder();
+            releaseMic();
             handler.removeCallbacksAndMessages(null);
             if (recognizer != null) recognizer.cancel();
             updateUi(getString(R.string.status_stopped_by_voice));
             return false;
         }
         return true;
+    }
+
+    /** Commits the last partial text as a final result; false if it was the spoken "stop". */
+    private boolean commitPartialAsFinal() {
+        Bundle b = new Bundle();
+        b.putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION,
+                new java.util.ArrayList<>(java.util.Collections.singletonList(lastPartial)));
+        return commitFinal(b);
     }
 
     @Override
@@ -622,10 +698,7 @@ public class DictationIME extends InputMethodService
         if (listening && !lastPartial.trim().isEmpty()) {
             // The engine often fails (ERROR_CLIENT) instead of delivering the final result:
             // treat the last partial as final so voice commands and digits still apply.
-            Bundle b = new Bundle();
-            b.putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION,
-                    new java.util.ArrayList<>(java.util.Collections.singletonList(lastPartial)));
-            if (!commitFinal(b)) return;
+            if (!commitPartialAsFinal()) return;
             if (error == SpeechRecognizer.ERROR_CLIENT || error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED) recreateRecognizer();
             restartSoon(200);
             return;
@@ -648,8 +721,7 @@ public class DictationIME extends InputMethodService
                 // ("capacity is full"). Rebind and back off instead of giving up quickly.
                 if (++busyRetries > 20) {
                     listening = false;
-                    MicService.stop(this);
-                    stopFeeder();
+                    releaseMic();
                     updateUi(getString(R.string.status_busy_giveup));
                     return;
                 }
@@ -660,14 +732,12 @@ public class DictationIME extends InputMethodService
             case SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED:
             case SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE:
                 listening = false;
-                MicService.stop(this);
-                stopFeeder();
+                releaseMic();
                 updateUi(getString(R.string.status_model_missing, Speech.language(this)));
                 return;
             case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
                 listening = false;
-                MicService.stop(this);
-                stopFeeder();
+                releaseMic();
                 updateUi(getString(R.string.status_no_mic));
                 return;
             case SpeechRecognizer.ERROR_SERVER_DISCONNECTED:
@@ -679,8 +749,7 @@ public class DictationIME extends InputMethodService
         }
         if (++consecutiveErrors >= 5) {
             listening = false;
-            MicService.stop(this);
-            stopFeeder();
+            releaseMic();
             updateUi(getString(R.string.status_error_giveup, Speech.errorName(error)));
             return;
         }
