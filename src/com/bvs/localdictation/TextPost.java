@@ -31,6 +31,29 @@ final class TextPost {
             "^(.*?)[\\s,;:—-]*" + NL + "стоп" + NR + "[\\s.!?…]*$", FLAGS | Pattern.DOTALL);
 
     /**
+     * True if {@code next} (a partial result) starts a new phrase instead of revising {@code prev}.
+     * The engine sometimes closes a phrase internally and starts the next one without sending a
+     * final result; a revision keeps the beginning of the phrase, a new phrase does not. Compares
+     * letters and digits only (case, spaces and punctuation ignored): a new phrase shares less
+     * than half of the shorter text as a common prefix.
+     */
+    static boolean isNewPhrase(String prev, String next) {
+        String a = letters(prev), b = letters(next);
+        if (a.isEmpty() || b.isEmpty()) return false;
+        int n = Math.min(a.length(), b.length()), common = 0;
+        while (common < n && a.charAt(common) == b.charAt(common)) common++;
+        return common * 2 < n;
+    }
+
+    private static String letters(String s) {
+        if (s == null) return "";
+        StringBuilder b = new StringBuilder();
+        s.toLowerCase(Locale.ROOT).replace('ё', 'е').codePoints()
+                .filter(Character::isLetterOrDigit).forEach(b::appendCodePoint);
+        return b.toString();
+    }
+
+    /**
      * If the utterance ends with the word "stop" (Russian), returns the text before it (possibly
      * empty); otherwise null. Only the last word counts, so "stop" mid-sentence stays text.
      */

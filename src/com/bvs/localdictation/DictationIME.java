@@ -70,6 +70,14 @@ public class DictationIME extends InputMethodService
     private boolean sessionLive;
     /** Latest partial text of the current session ("" if none). */
     private String lastPartial = "";
+    /** When lastPartial arrived (elapsedRealtime). */
+    private long lastPartialAt;
+    /**
+     * A partial that does not continue the previous one and comes after at least this pause is a new
+     * phrase (the engine closed the previous one without a final result). Revisions of the same
+     * phrase arrive within ~150 ms; observed new phrases after 1.1-2.9 s.
+     */
+    private static final long NEW_PHRASE_GAP_MS = 600;
     private final Runnable feederCheck = () -> {
         if (feeder != null && feeder.isBlocked() && listening) {
             Log.w(TAG, "engine does not read EXTRA_AUDIO_SOURCE; falling back to its own mic");
@@ -600,7 +608,16 @@ public class DictationIME extends InputMethodService
         Log.d(TAG, "partial: " + text.length() + " chars");
         handler.removeCallbacks(watchdog);
         if (text.trim().isEmpty()) return;
+        long now = SystemClock.elapsedRealtime();
+        if (!lastPartial.trim().isEmpty() && now - lastPartialAt >= NEW_PHRASE_GAP_MS
+                && TextPost.isNewPhrase(lastPartial, text)) {
+            // Otherwise the new phrase would replace the previous one in the composing text.
+            Log.d(TAG, "new phrase without a final result: committing the previous partial ("
+                    + lastPartial.length() + " chars)");
+            if (!commitPartialAsFinal()) return;   // spoken "stop"
+        }
         lastPartial = text;
+        lastPartialAt = now;
         InputConnection ic = target();
         if (ic == null) return;   // locked: the final result goes to the held text
         if (!segmentStarted) decideSegmentFormat(ic);
@@ -610,6 +627,7 @@ public class DictationIME extends InputMethodService
     @Override
     public void onResults(Bundle results) {
         Log.d(TAG, "results: " + best(results).length() + " chars");
+        markHandoff();
         if (!commitFinal(results)) return;
         // Non-segmented mode. The engine may still deliver a second result for the same
         // utterance shortly after the first one; restarting immediately cancels it and
@@ -645,7 +663,9 @@ public class DictationIME extends InputMethodService
      * stopped by the spoken "stop" command (Russian).
      */
     private boolean commitFinal(Bundle results) {
-        markHandoff();
+        // No markHandoff() here: phrases are also committed in the middle of a live session
+        // (segment results, a new phrase), and moving the replay point there would make the next
+        // session re-recognize audio that was already typed.
         lastPartial = "";
         consecutiveErrors = 0;
         handler.removeCallbacks(watchdog);

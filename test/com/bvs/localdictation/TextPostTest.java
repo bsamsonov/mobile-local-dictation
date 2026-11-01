@@ -56,6 +56,22 @@ public class TextPostTest {
             String got = TextPost.stripStop(c[0]);
             if (!Objects.equals(got, c[1])) { fail++; System.out.println("FAIL stop: [" + c[0] + "] -> [" + got + "] want [" + c[1] + "]"); }
         }
+        // {previous partial, next partial, "1" if next starts a new phrase}
+        String[][] phrase = {
+                {"Привет, как дела", "Ну вот", "1"},
+                {"я пошёл домой", "я сказал", "1"},
+                {"Новая стро.", "Перевод строки", "1"},
+                {"привет как дела", "Привет, как дела?", "0"},
+                {"двадцать пять", "двадцать", "0"},
+                {"hello world", "hello word", "0"},
+                {"Hello world.", "hello", "0"},
+                {"", "abc", "0"},
+                {"...", "abc", "0"},
+        };
+        for (String[] c : phrase) {
+            boolean got = TextPost.isNewPhrase(c[0], c[1]);
+            if (got != c[2].equals("1")) { fail++; System.out.println("FAIL phrase: [" + c[0] + "] -> [" + c[1] + "] got " + got); }
+        }
         System.out.println(fail == 0 ? "ALL OK" : fail + " failed");
         if (fail > 0) System.exit(1);
     }
