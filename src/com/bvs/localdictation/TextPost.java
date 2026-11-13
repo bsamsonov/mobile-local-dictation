@@ -27,6 +27,17 @@ final class TextPost {
                     + "[.,;:!?]?[ \\t]*", FLAGS);
     private static final Pattern AFTER_NEWLINE = Pattern.compile("\n(\\p{Ll})");
 
+    // Spoken punctuation marks (Russian): the engine does not turn these words into characters.
+    // The mark replaces the word together with the space and the engine's own mark around it.
+    private static final String MARK_L = "[ \\t]*[,.;:]?[ \\t]*" + NL;
+    private static final String MARK_R = NR + "[,.;:!?]?";
+    private static final Pattern SEMICOLON = Pattern.compile(MARK_L + "точка с запятой" + MARK_R, FLAGS);
+    private static final Pattern COMMA = Pattern.compile(MARK_L + "запятая" + MARK_R, FLAGS);
+    /** Not "точка зрения" (point of view). */
+    private static final Pattern PERIOD = Pattern.compile(MARK_L + "точка" + NR + "(?![ \\t]+зрения)[,.;:!?]?", FLAGS);
+    private static final char SPOKEN = '\u0000';   // marks a period that came from the spoken word
+    private static final Pattern AFTER_SPOKEN = Pattern.compile(SPOKEN + "([ \\t]*)(\\p{L})?");
+
     private static final Pattern STOP = Pattern.compile(
             "^(.*?)[\\s,;:—-]*" + NL + "стоп" + NR + "[\\s.!?…]*$", FLAGS | Pattern.DOTALL);
 
@@ -82,6 +93,7 @@ final class TextPost {
 
     /** Spoken "new line" / "enter" / "new paragraph" (Russian and English) -> "\n" / "\n\n"; capitalises the next line. */
     static String voiceCommands(String s) {
+        s = spokenMarks(s);
         s = PARAGRAPH.matcher(s).replaceAll("\n\n");
         s = NEWLINE.matcher(s).replaceAll("\n");
         Matcher m = AFTER_NEWLINE.matcher(s);
@@ -89,6 +101,37 @@ final class TextPost {
         while (m.find()) m.appendReplacement(sb, "\n" + m.group(1).toUpperCase(Locale.ROOT));
         m.appendTail(sb);
         return sb.toString();
+    }
+
+    /**
+     * The spoken words "запятая", "точка", "точка с запятой" (comma, period, semicolon) -> the mark,
+     * attached to the word before it; the word after a period is capitalised.
+     */
+    static String spokenMarks(String s) {
+        s = SEMICOLON.matcher(s).replaceAll(";");
+        s = COMMA.matcher(s).replaceAll(",");
+        s = PERIOD.matcher(s).replaceAll("." + SPOKEN);
+        if (s.indexOf(SPOKEN) < 0) return s;
+        Matcher m = AFTER_SPOKEN.matcher(s);
+        StringBuilder sb = new StringBuilder();
+        while (m.find()) {
+            String next = m.group(2) == null ? "" : m.group(2).toUpperCase(Locale.ROOT);
+            m.appendReplacement(sb, Matcher.quoteReplacement(m.group(1) + next));
+        }
+        m.appendTail(sb);
+        return sb.toString();
+    }
+
+    /**
+     * Joins a phrase to the text before it when the phrase starts with a mark from a spoken word:
+     * if that text already ends with a mark (the engine closes every phrase with a period), the
+     * leading mark is dropped. Returns the phrase to format as usual, or null if it was only a mark
+     * that is not needed.
+     */
+    static String dropLeadingMark(String phrase, boolean afterMark) {
+        if (phrase.isEmpty() || ",.;".indexOf(phrase.charAt(0)) < 0 || !afterMark) return phrase;
+        String rest = phrase.substring(1).trim();
+        return rest.isEmpty() ? null : rest;
     }
 
     // ------------------------------------------------------------------ numbers

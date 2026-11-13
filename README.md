@@ -37,7 +37,8 @@ I dictate notes on a Samsung phone, and the stock voice input kept getting in th
   engine (`EXTRA_AUDIO_SOURCE`) with a short replay buffer, so words spoken while a new session starts are not lost.
 - Recovery from a stalled or busy recognizer (watchdog, recreate + back-off).
 - Keys for what voice does badly: line break, punctuation, settings, back to your regular keyboard (see [Keys](#keys)).
-- Punctuation by voice ("comma", "period") is done by the engine itself (formatting, Android 13+).
+- Punctuation is put by the engine itself (formatting, Android 13+). The Russian engine leaves the spoken words
+  "запятая" / "точка" / "точка с запятой" (comma / period / semicolon) as words, so the app turns them into marks.
 - Voice commands "new line" / "enter" / "new paragraph" (English and Russian) insert line breaks.
 - Russian post-processing (`TextPost`): numbers as digits,
   "stop" (said in Russian) at the end of a phrase stops dictation.

@@ -112,6 +112,8 @@ public class DictationIME extends InputMethodService
     private boolean segmentStarted;
     private String segmentPrefix = "";
     private boolean segmentCapitalize;
+    /** The text before the phrase ends with a punctuation mark. */
+    private boolean segmentAfterMark;
 
     // Screen locked during dictation: recognized text is held here instead of being typed into
     // whatever window has input now (the lock screen), and inserted after unlock.
@@ -574,6 +576,7 @@ public class DictationIME extends InputMethodService
         String trimmed = b.replaceAll("\\s+$", "");
         boolean endsWithSpace = !b.isEmpty() && Character.isWhitespace(b.charAt(b.length() - 1));
         segmentPrefix = (b.isEmpty() || endsWithSpace) ? "" : " ";
+        segmentAfterMark = !trimmed.isEmpty() && ".,;:!?…".indexOf(trimmed.charAt(trimmed.length() - 1)) >= 0;
         segmentCapitalize = trimmed.isEmpty() || ".!?…".indexOf(trimmed.charAt(trimmed.length() - 1)) >= 0
                 || b.replaceAll("[ \\t]+$", "").endsWith("\n");
         segmentStarted = true;
@@ -586,6 +589,12 @@ public class DictationIME extends InputMethodService
         if (Speech.voiceCommands(this)) t = TextPost.voiceCommands(t);
         if (ru && Speech.digits(this)) t = TextPost.numbersToDigits(t);
         if (t.startsWith("\n")) return t;   // starts with a line break: no leading space, already capitalised
+        if (",.;".indexOf(t.charAt(0)) >= 0) {
+            // Starts with a mark from a spoken word ("запятая", "точка"): it goes right after the text.
+            t = TextPost.dropLeadingMark(t, segmentAfterMark);
+            if (t == null) return "";
+            if (",.;".indexOf(t.charAt(0)) >= 0) return t;
+        }
         if (segmentCapitalize) {
             t = t.substring(0, 1).toUpperCase() + t.substring(1);
         } else if (t.length() > 1 && Character.isUpperCase(t.charAt(0)) && Character.isLowerCase(t.charAt(1))) {

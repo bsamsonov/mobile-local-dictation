@@ -38,10 +38,32 @@ public class TextPostTest {
                 {"done enter next", "done\nNext"},
                 {"first. New paragraph. second", "first.\n\nSecond"},
                 {"Энтер", "\n"},
+                {"привет запятая как дела", "привет, как дела"},
+                {"Привет, запятая, как дела.", "Привет, как дела."},
+                {"первое точка второе", "первое. Второе"},
+                {"Всё готово точка.", "Всё готово."},
+                {"Всё готово. Точка.", "Всё готово."},
+                {"Запятая а потом", ", а потом"},
+                {"моя точка зрения", "моя точка зрения"},
+                {"поставь точку и запятую", "поставь точку и запятую"},
+                {"раз точка с запятой два", "раз; два"},
+                {"конец точка новая строка начало", "конец.\nНачало"},
         };
         for (String[] c : cmd) {
             String got = TextPost.voiceCommands(c[0]);
             if (!got.equals(c[1])) { fail++; System.out.println("FAIL cmd: [" + c[0] + "] -> [" + got.replace("\n", "\\n") + "] want [" + c[1].replace("\n", "\\n") + "]"); }
+        }
+        // {phrase, "1" if the text before ends with a mark, expected}
+        String[][] lead = {
+                {", а потом", "0", ", а потом"},
+                {", а потом", "1", "а потом"},
+                {".", "1", null},
+                {".", "0", "."},
+                {"обычный текст", "1", "обычный текст"},
+        };
+        for (String[] c : lead) {
+            String got = TextPost.dropLeadingMark(c[0], c[1].equals("1"));
+            if (!Objects.equals(got, c[2])) { fail++; System.out.println("FAIL lead: [" + c[0] + "] -> [" + got + "]"); }
         }
         String[][] stop = {
                 {"Стоп", ""},
