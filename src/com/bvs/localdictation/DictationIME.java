@@ -667,14 +667,15 @@ public class DictationIME extends InputMethodService
         handler.removeCallbacks(watchdog);
         busyRetries = 0;
         consecutiveErrors = 0;
-        updateUi(readyStatus());
+        if (listening) updateUi(readyStatus());
     }
 
     @Override public void onBeginningOfSpeech() {
         // The engine's own microphone: speech started, expect partial results soon. With our own
         // audio the engine reports "speech" right after every pause, also in silence.
         if (feeder == null) arm(7000);
-        updateUi(getString(R.string.status_listening));
+        // Late events of a stopped session must not show "Listening" next to the Dictate button.
+        if (listening) updateUi(getString(R.string.status_listening));
     }
 
     @Override public void onRmsChanged(float rmsdB) {}
@@ -684,7 +685,7 @@ public class DictationIME extends InputMethodService
     @Override public void onEndOfSpeech() {
         phrases.endOfSpeech(SystemClock.elapsedRealtime());
         markHandoff();
-        updateUi(getString(R.string.status_recognizing));
+        if (listening) updateUi(getString(R.string.status_recognizing));
     }
 
     @Override
