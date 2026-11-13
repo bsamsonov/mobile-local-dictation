@@ -465,6 +465,14 @@ public class DictationIME extends InputMethodService
 
     private void beginSession() {
         if (!listening || recognizer == null) return;
+        if (recognizerUsed) {
+            // One recognizer per session: the engine may report an error for a session up to a second
+            // after its result, and that late event must not end the session started in between.
+            // The new recognizer needs a moment: started at once it fails with SERVER_DISCONNECTED.
+            recreateRecognizer();
+            handler.postDelayed(this::beginSession, 100);
+            return;
+        }
         segmentStarted = false;
         Log.d(TAG, "startListening " + Speech.language(this) + " feeder=" + (feeder != null));
         sessionLive = false;
@@ -488,9 +496,6 @@ public class DictationIME extends InputMethodService
             intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, AudioFormat.ENCODING_PCM_16BIT);
             intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, AudioFeeder.RATE);
         }
-        // One recognizer per session: the engine may report an error for a session up to a second
-        // after its result, and that late event must not end the session started in between.
-        if (recognizerUsed) recreateRecognizer();
         recognizerUsed = true;
         recognizer.startListening(intent);
         arm(4000);   // expect onReadyForSpeech (mic opened) soon
