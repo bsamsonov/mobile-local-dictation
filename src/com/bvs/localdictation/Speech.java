@@ -64,7 +64,10 @@ final class Speech {
 
     static void setHeadsetMic(Context c, boolean v) { prefs(c).edit().putBoolean("headsetMic", v).apply(); }
 
-    static Intent recognizeIntent(Context c) {
+    static Intent recognizeIntent(Context c) { return recognizeIntent(c, true); }
+
+    /** {@code segmented}: ask for a segmented session (the engine's own microphone, see below). */
+    static Intent recognizeIntent(Context c, boolean segmented) {
         Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, language(c));
@@ -72,7 +75,7 @@ final class Speech {
         i.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true);
         i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
         i.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, c.getPackageName());
-        if (Build.VERSION.SDK_INT >= 33) {
+        if (Build.VERSION.SDK_INT >= 33 && segmented) {
             // Segmented session: one long session that returns each phrase via onSegmentResults
             // instead of ending (and having to be restarted) at every pause. Ends after 30 s of
             // silence. Engines that don't support it ignore these extras.

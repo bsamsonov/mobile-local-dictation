@@ -62,7 +62,8 @@ final class TextPost {
         return !t.isEmpty() && letters(committed).contains(t);
     }
 
-    private static String letters(String s) {
+    /** Lowercase letters and digits of the text, nothing else. */
+    static String letters(String s) {
         if (s == null) return "";
         StringBuilder b = new StringBuilder();
         s.toLowerCase(Locale.ROOT).replace('ё', 'е').codePoints()

@@ -6,11 +6,13 @@ import android.media.AudioRecord;
 import android.media.MediaRecorder;
 import android.os.ParcelFileDescriptor;
 import android.os.SystemClock;
+import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
 import android.util.Log;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -39,6 +41,9 @@ final class AudioFeeder {
     private final Object lock = new Object();
     private final ArrayDeque<Chunk> ring = new ArrayDeque<>();
     private AudioRecord rec;
+    /** Test audio (raw 16 kHz 16-bit mono PCM) played instead of the microphone; null normally. */
+    private InputStream file;
+    private Runnable fileEnd;
     private Thread thread;
     private volatile boolean running;
 
@@ -49,6 +54,8 @@ final class AudioFeeder {
 
     /** Set when the pipe is full, i.e. the engine is not reading our audio. */
     private volatile boolean blocked;
+    /** Set when the engine closed its end of the current session's pipe. */
+    private volatile boolean broken;
 
     /** Starts recording; {@code input} is the preferred microphone (null: the system picks). */
     boolean start(AudioDeviceInfo input) {
@@ -74,6 +81,53 @@ final class AudioFeeder {
         return true;
     }
 
+    /**
+     * Test mode: feeds raw PCM (16 kHz, 16-bit, mono) at real-time pace instead of the microphone,
+     * then {@code tailMs} of silence, then calls {@code onEnd} (on the feeder thread) once.
+     */
+    boolean startFile(InputStream pcm, long tailMs, Runnable onEnd) {
+        file = pcm;
+        fileTail = tailMs;
+        fileEnd = onEnd;
+        running = true;
+        thread = new Thread(this::loop, "AudioFeeder");
+        thread.start();
+        Log.d(TAG, "feeder started from a file");
+        return true;
+    }
+
+    private long fileTail;
+    private long fileNext;
+
+    /** Next 20 ms of the test file (silence after its end), paced by the clock. */
+    private int readFile(byte[] buf) {
+        long now = SystemClock.elapsedRealtime();
+        if (fileNext == 0) fileNext = now;
+        fileNext += 20;
+        if (fileNext > now) {
+            try { Thread.sleep(fileNext - now); } catch (InterruptedException e) { return 0; }
+        }
+        int n = 0;
+        try {
+            while (file != null && n < buf.length) {
+                int r = file.read(buf, n, buf.length - n);
+                if (r < 0) { file.close(); file = null; break; }
+                n += r;
+            }
+        } catch (IOException e) {
+            file = null;
+        }
+        if (n < buf.length) {
+            Arrays.fill(buf, n, buf.length, (byte) 0);
+            if (n == 0 && fileEnd != null && (fileTail -= 20) <= 0) {
+                Runnable r = fileEnd;
+                fileEnd = null;
+                r.run();
+            }
+        }
+        return buf.length;
+    }
+
     void stop() {
         running = false;
         if (thread != null) {
@@ -94,6 +148,8 @@ final class AudioFeeder {
 
     boolean isBlocked() { return blocked; }
 
+    boolean isBroken() { return broken; }
+
     /**
      * Opens a pipe for the next session. Audio recorded since {@code sinceMs}
      * (SystemClock.elapsedRealtime) is written first. Returns the read end for the intent.
@@ -113,6 +169,7 @@ final class AudioFeeder {
             // Cap the replay below the 64 KB pipe buffer (~2 s) so a non-blocking write never overflows it.
             replayFrom = Math.max(sinceMs, SystemClock.elapsedRealtime() - MAX_REPLAY_MS);
             blocked = false;
+            broken = false;
         }
         return p[0];
     }
@@ -131,7 +188,7 @@ final class AudioFeeder {
     private void loop() {
         byte[] buf = new byte[CHUNK_BYTES];
         while (running) {
-            int n = rec.read(buf, 0, buf.length);
+            int n = rec != null ? rec.read(buf, 0, buf.length) : readFile(buf);
             if (n <= 0) continue;
             long now = SystemClock.elapsedRealtime();
             byte[] data = Arrays.copyOf(buf, n);
@@ -154,9 +211,17 @@ final class AudioFeeder {
             try {
                 for (byte[] b : toWrite) o.write(b);
             } catch (IOException e) {
-                // EAGAIN: pipe full (engine not reading); EPIPE: engine closed its end.
-                if (!blocked) Log.d(TAG, "feeder write failed: " + e.getMessage());
-                blocked = true;
+                // EAGAIN: pipe full (engine not reading). EPIPE: the engine closed its end, which it
+                // does at the end of a session. EBADF: we closed this pipe for the next session.
+                boolean full = e.getCause() instanceof ErrnoException
+                        ? ((ErrnoException) e.getCause()).errno == OsConstants.EAGAIN
+                        : String.valueOf(e.getMessage()).contains("EAGAIN");
+                boolean current;
+                synchronized (lock) { current = o == out; }
+                if (!current) continue;
+                if (!blocked && !broken) Log.d(TAG, "feeder write failed: " + e.getMessage());
+                if (full) blocked = true;
+                else broken = true;
             }
         }
     }

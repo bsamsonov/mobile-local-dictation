@@ -48,13 +48,17 @@ import java.util.ArrayList;
  * results committed.
  */
 public class DictationIME extends InputMethodService
-        implements RecognitionListener, MicService.StopListener {
+        implements RecognitionListener, MicService.StopListener, PhraseTracker.Sink {
 
     private static final String TAG = "LocalDictation";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     private SpeechRecognizer recognizer;
+    /** The recognizer already ran a session (see beginSession). */
+    private boolean recognizerUsed;
+    /** Listener of the current recognizer; events for an older one are dropped. */
+    private Session session;
     /** User wants dictation on (mic toggled). Sessions are restarted while this is true. */
     private boolean listening;
     private int consecutiveErrors;
@@ -68,31 +72,30 @@ public class DictationIME extends InputMethodService
     private long replayFrom;
     /** The current session became ready and has not ended yet. */
     private boolean sessionLive;
-    /** Latest partial text of the current session ("" if none). */
-    private String lastPartial = "";
-    /** When lastPartial arrived (elapsedRealtime). */
-    private long lastPartialAt;
-    /**
-     * A partial that does not continue the previous one and comes after at least this pause is a new
-     * phrase (the engine closed the previous one without a final result). Revisions of the same
-     * phrase arrive within ~150 ms; observed new phrases after 1.1-2.9 s.
-     */
-    private static final long NEW_PHRASE_GAP_MS = 600;
-    /**
-     * Text committed from the partial because the engine's final covered only a piece of it, and when.
-     * A later final for the same phrase that is inside this text is dropped instead of typed twice.
-     */
-    private String partialCommitted = "";
-    private long partialCommittedAt;
-    private final Runnable feederCheck = () -> {
-        if (feeder != null && feeder.isBlocked() && listening) {
+    /** Decides from the engine's events what is the phrase in progress and when it is finished. */
+    private final PhraseTracker phrases = new PhraseTracker(this);
+    /** Every 3 s of a session: is the engine still reading our audio? */
+    private final Runnable feederCheck = this::checkFeeder;
+
+    private void checkFeeder() {
+        if (feeder == null || !listening) return;
+        if (feeder.isBlocked()) {
             Log.w(TAG, "engine does not read EXTRA_AUDIO_SOURCE; falling back to its own mic");
             feederUnsupported = true;
             stopFeeder();
             recreateRecognizer();
             restartSoon(200);
+        } else if (feeder.isBroken() && sessionLive) {
+            // The engine closed the audio pipe but reported nothing: the session is dead.
+            Log.w(TAG, "engine closed the audio pipe without ending the session; restarting");
+            markHandoff();
+            if (!phrases.sessionFailed(SystemClock.elapsedRealtime())) return;   // spoken "stop"
+            recreateRecognizer();
+            restartSoon(200);
+        } else {
+            handler.postDelayed(feederCheck, 3000);
         }
-    };
+    }
 
     /** Debounced auto-start: some apps (Samsung Notes) do start/finish/start of input within ~150 ms. */
     private final Runnable autoStart = this::startListening;
@@ -377,10 +380,7 @@ public class DictationIME extends InputMethodService
             updateUi(getString(R.string.status_no_ondevice));
             return;
         }
-        if (recognizer == null) {
-            recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(this);
-            recognizer.setRecognitionListener(this);
-        }
+        if (recognizer == null) recreateRecognizer();
         listening = true;
         MicService.start(this, this);
         busyRetries = 0;
@@ -395,11 +395,28 @@ public class DictationIME extends InputMethodService
             if (!listening || gen != routeGen) return;
             if (feeder == null && !feederUnsupported && Build.VERSION.SDK_INT >= 33 && Speech.continuousAudio(this)) {
                 feeder = new AudioFeeder();
-                if (!feeder.start(route.inputDevice())) feeder = null;
+                if (!startCapture()) feeder = null;
             }
             replayFrom = SystemClock.elapsedRealtime();
             beginSession();
         });
+    }
+
+    /**
+     * Starts the microphone capture. Development hook: if test.pcm (raw 16 kHz 16-bit mono) is in
+     * the app's external files directory, it is played to the engine instead of the microphone and
+     * dictation stops at its end, so the keyboard can be tested end to end without speaking.
+     */
+    private boolean startCapture() {
+        java.io.File test = new java.io.File(getExternalFilesDir(null), "test.pcm");
+        if (!test.isFile()) return feeder.start(route.inputDevice());
+        try {
+            Log.w(TAG, "test audio instead of the microphone: " + test);
+            return feeder.startFile(new java.io.FileInputStream(test), 3000,
+                    () -> handler.post(() -> { if (listening) toggle(); }));
+        } catch (IOException e) {
+            return feeder.start(route.inputDevice());
+        }
     }
 
     /** Microphone key: phone <-> headset. A running dictation goes on from the new source. */
@@ -422,7 +439,7 @@ public class DictationIME extends InputMethodService
     /** Restarts capture and the session on the current route, keeping dictation on. */
     private void reroute() {
         handler.removeCallbacksAndMessages(null);
-        if (!lastPartial.trim().isEmpty() && !commitPartialAsFinal()) return;   // spoken "stop"
+        if (!phrases.sessionFailed(SystemClock.elapsedRealtime())) return;   // spoken "stop"
         InputConnection ic = target();
         if (ic != null) ic.finishComposingText();
         segmentStarted = false;
@@ -451,20 +468,30 @@ public class DictationIME extends InputMethodService
         segmentStarted = false;
         Log.d(TAG, "startListening " + Speech.language(this) + " feeder=" + (feeder != null));
         sessionLive = false;
-        lastPartial = "";
-        Intent intent = Speech.recognizeIntent(this);
+        ParcelFileDescriptor pfd = null;
         if (feeder != null) {
             try {
-                ParcelFileDescriptor pfd = feeder.newSession(replayFrom);
-                intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, pfd);
-                intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1);
-                intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, AudioFormat.ENCODING_PCM_16BIT);
-                intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, AudioFeeder.RATE);
+                pfd = feeder.newSession(replayFrom);
             } catch (IOException e) {
                 Log.w(TAG, "pipe failed", e);
                 stopFeeder();
             }
         }
+        // With our own audio the engine keeps one session across pauses (see PhraseTracker); with its
+        // own microphone it ends the session at every pause unless the session is segmented.
+        boolean continuous = pfd != null;
+        phrases.sessionStart(continuous);
+        Intent intent = Speech.recognizeIntent(this, !continuous);
+        if (continuous) {
+            intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, pfd);
+            intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1);
+            intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, AudioFormat.ENCODING_PCM_16BIT);
+            intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, AudioFeeder.RATE);
+        }
+        // One recognizer per session: the engine may report an error for a session up to a second
+        // after its result, and that late event must not end the session started in between.
+        if (recognizerUsed) recreateRecognizer();
+        recognizerUsed = true;
         recognizer.startListening(intent);
         arm(4000);   // expect onReadyForSpeech (mic opened) soon
         updateUi(getString(R.string.status_connecting));
@@ -549,7 +576,7 @@ public class DictationIME extends InputMethodService
 
     private String format(String text) {
         String t = text == null ? "" : text.trim();
-        if (t.isEmpty()) return "";
+        if (t.isEmpty()) return text != null && text.indexOf('\n') >= 0 ? "\n" : "";   // the engine's own "new line"
         boolean ru = Speech.isRussian(this);
         if (Speech.voiceCommands(this)) t = TextPost.voiceCommands(t);
         if (ru && Speech.digits(this)) t = TextPost.numbersToDigits(t);
@@ -573,10 +600,14 @@ public class DictationIME extends InputMethodService
         return sb.append(']').toString();
     }
 
+    private static ArrayList<String> hypotheses(Bundle b) {
+        ArrayList<String> list = b == null ? null : b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+        return list == null ? new ArrayList<>() : list;
+    }
+
     private static String best(Bundle b) {
-        if (b == null) return "";
-        ArrayList<String> list = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-        return list == null || list.isEmpty() || list.get(0) == null ? "" : list.get(0);
+        ArrayList<String> list = hypotheses(b);
+        return list.isEmpty() || list.get(0) == null ? "" : list.get(0);
     }
 
     // ---------------------------------------------------------------- RecognitionListener
@@ -587,7 +618,29 @@ public class DictationIME extends InputMethodService
             recognizer.destroy();
         }
         recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(this);
-        recognizer.setRecognitionListener(this);
+        recognizerUsed = false;
+        session = new Session();
+        recognizer.setRecognitionListener(session);
+    }
+
+    /** Passes the events of one recognizer on, until that recognizer is replaced. */
+    private final class Session implements RecognitionListener {
+        private boolean stale(String event) {
+            if (session == this) return false;
+            Log.d(TAG, "late " + event + " of a replaced recognizer: ignored");
+            return true;
+        }
+        @Override public void onReadyForSpeech(Bundle b) { if (!stale("ready")) DictationIME.this.onReadyForSpeech(b); }
+        @Override public void onBeginningOfSpeech() { if (session == this) DictationIME.this.onBeginningOfSpeech(); }
+        @Override public void onRmsChanged(float v) {}
+        @Override public void onBufferReceived(byte[] b) {}
+        @Override public void onEndOfSpeech() { if (session == this) DictationIME.this.onEndOfSpeech(); }
+        @Override public void onPartialResults(Bundle b) { if (!stale("partial")) DictationIME.this.onPartialResults(b); }
+        @Override public void onResults(Bundle b) { if (!stale("results")) DictationIME.this.onResults(b); }
+        @Override public void onSegmentResults(Bundle b) { if (!stale("segment")) DictationIME.this.onSegmentResults(b); }
+        @Override public void onEndOfSegmentedSession() { if (!stale("end")) DictationIME.this.onEndOfSegmentedSession(); }
+        @Override public void onError(int e) { if (!stale("error " + Speech.errorName(e))) DictationIME.this.onError(e); }
+        @Override public void onEvent(int t, Bundle b) {}
     }
 
     @Override public void onReadyForSpeech(Bundle params) {
@@ -604,7 +657,9 @@ public class DictationIME extends InputMethodService
     }
 
     @Override public void onBeginningOfSpeech() {
-        arm(7000);   // speech started: expect partial results soon
+        // The engine's own microphone: speech started, expect partial results soon. With our own
+        // audio the engine reports "speech" right after every pause, also in silence.
+        if (feeder == null) arm(7000);
         updateUi(getString(R.string.status_listening));
     }
 
@@ -613,28 +668,24 @@ public class DictationIME extends InputMethodService
     @Override public void onBufferReceived(byte[] buffer) {}
 
     @Override public void onEndOfSpeech() {
+        phrases.endOfSpeech(SystemClock.elapsedRealtime());
         markHandoff();
         updateUi(getString(R.string.status_recognizing));
     }
 
     @Override
     public void onPartialResults(Bundle partialResults) {
-        String text = best(partialResults);
-        Log.d(TAG, "partial: " + text.length() + " chars");
+        ArrayList<String> hyps = hypotheses(partialResults);
+        Log.d(TAG, "partial: " + hypLengths(partialResults) + " chars");
         handler.removeCallbacks(watchdog);
-        if (text.trim().isEmpty()) return;
-        long now = SystemClock.elapsedRealtime();
-        if (!lastPartial.trim().isEmpty() && now - lastPartialAt >= NEW_PHRASE_GAP_MS
-                && TextPost.isNewPhrase(lastPartial, text)) {
-            // Otherwise the new phrase would replace the previous one in the composing text.
-            Log.d(TAG, "new phrase without a final result: committing the previous partial ("
-                    + lastPartial.length() + " chars)");
-            if (!commitPartialAsFinal()) return;   // spoken "stop"
-        }
-        lastPartial = text;
-        lastPartialAt = now;
+        phrases.partial(hyps, SystemClock.elapsedRealtime());
+    }
+
+    /** PhraseTracker.Sink: the phrase in progress, shown as composing (underlined) text. */
+    @Override
+    public void compose(String text) {
         InputConnection ic = target();
-        if (ic == null) return;   // locked: the final result goes to the held text
+        if (ic == null) return;   // locked: the finished phrase goes to the held text
         if (!segmentStarted) decideSegmentFormat(ic);
         ic.setComposingText(format(text), 1);
     }
@@ -643,7 +694,7 @@ public class DictationIME extends InputMethodService
     public void onResults(Bundle results) {
         Log.d(TAG, "results: " + hypLengths(results) + " chars");
         markHandoff();
-        if (!commitFinal(results)) return;
+        if (!phrases.result(best(results), true, SystemClock.elapsedRealtime())) return;
         // Non-segmented mode. The engine may still deliver a second result for the same
         // utterance shortly after the first one; restarting immediately cancels it and
         // triggers a cancel/busy cascade during which speech is lost. Give it a grace period
@@ -657,7 +708,7 @@ public class DictationIME extends InputMethodService
     @Override
     public void onSegmentResults(Bundle segmentResults) {
         Log.d(TAG, "segment: " + hypLengths(segmentResults) + " chars");
-        commitFinal(segmentResults);
+        phrases.result(best(segmentResults), false, SystemClock.elapsedRealtime());
     }
 
     /** Segmented mode: the whole session ended (long silence or stop). */
@@ -674,44 +725,26 @@ public class DictationIME extends InputMethodService
     }
 
     /**
-     * Commits a final (or segment) result at the cursor. Returns false if dictation was
-     * stopped by the spoken "stop" command (Russian).
+     * PhraseTracker.Sink: types a finished phrase at the cursor in place of the composing text.
+     * Returns false if dictation was stopped by the spoken "stop" command (Russian).
      */
-    private boolean commitFinal(Bundle results) {
-        // No markHandoff() here: phrases are also committed in the middle of a live session
-        // (segment results, a new phrase), and moving the replay point there would make the next
-        // session re-recognize audio that was already typed.
-        String partial = lastPartial;
-        lastPartial = "";
+    @Override
+    public boolean commit(String text) {
+        // No markHandoff() here: phrases are also committed in the middle of a live session, and
+        // moving the replay point there would make the next session re-recognize typed audio.
         consecutiveErrors = 0;
         handler.removeCallbacks(watchdog);
-        String text = best(results);
-        long now = SystemClock.elapsedRealtime();
-        if (partial.trim().isEmpty() && now - partialCommittedAt < 1500
-                && TextPost.coveredBy(partialCommitted, text)) {
-            Log.d(TAG, "final already typed from the partial: dropped (" + text.length() + " chars)");
-            return true;
-        }
-        String chosen = TextPost.pickFinal(partial, text);
-        if (chosen != text) {
-            // The engine's final covers only a piece of what it showed; typing it would erase the rest.
-            Log.d(TAG, "final " + text.length() + " chars is a piece of the partial "
-                    + partial.length() + " chars: committing the partial");
-            partialCommitted = chosen;
-            partialCommittedAt = now;
-            text = chosen;
-        }
         String beforeStop = Speech.isRussian(this) && Speech.voiceCommands(this) ? TextPost.stripStop(text) : null;
         boolean stopCommand = beforeStop != null;
         if (stopCommand) text = beforeStop;
         InputConnection ic = target();
         if (locked) {
-            if (!text.trim().isEmpty()) {
+            if (!PhraseTracker.blank(text)) {
                 if (!segmentStarted) decideSegmentFormat(null);
                 held.append(format(text));
             }
         } else if (ic != null) {
-            if (!text.trim().isEmpty()) {
+            if (!PhraseTracker.blank(text)) {
                 if (!segmentStarted) decideSegmentFormat(ic);
                 ic.commitText(format(text), 1); // replaces the composing partial text
             } else if (stopCommand) {
@@ -733,28 +766,20 @@ public class DictationIME extends InputMethodService
         return true;
     }
 
-    /** Commits the last partial text as a final result; false if it was the spoken "stop". */
-    private boolean commitPartialAsFinal() {
-        Bundle b = new Bundle();
-        b.putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION,
-                new java.util.ArrayList<>(java.util.Collections.singletonList(lastPartial)));
-        return commitFinal(b);
-    }
-
     @Override
     public void onError(int error) {
         Log.d(TAG, "error " + Speech.errorName(error) + " listening=" + listening);
         handler.removeCallbacks(watchdog);
         markHandoff();
-        if (listening && !lastPartial.trim().isEmpty()) {
-            // The engine often fails (ERROR_CLIENT) instead of delivering the final result:
-            // treat the last partial as final so voice commands and digits still apply.
-            if (!commitPartialAsFinal()) return;
+        // The engine may fail instead of delivering the final result: the phrase in progress becomes
+        // final as shown, so voice commands and digits still apply (also after Stop).
+        boolean hadPhrase = phrases.hasPending();
+        if (!phrases.sessionFailed(SystemClock.elapsedRealtime())) return;   // spoken "stop"
+        if (listening && hadPhrase) {
             if (error == SpeechRecognizer.ERROR_CLIENT || error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED) recreateRecognizer();
             restartSoon(200);
             return;
         }
-        lastPartial = "";
         InputConnection ic = target();
         if (ic != null) ic.finishComposingText();
         segmentStarted = false;
