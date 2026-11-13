@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Development trace tool ("./build.sh trace"); installed as com.bvs.localdictation.trace. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.bvs.localdictation">
+
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
+    <application android:label="Local Dictation Trace">
+        <service android:name=".TraceService" android:exported="true"
+            android:foregroundServiceType="microphone|dataSync" />
+    </application>
+</manifest>
