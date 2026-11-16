@@ -36,6 +36,12 @@ final class PhraseTracker {
      * were observed after 0.5-2.9 s.
      */
     static final long NEW_PHRASE_GAP_MS = 600;
+    /**
+     * A finished phrase with at least this many letters that starts the next phrase in progress is a
+     * repeat of the engine (log 16.11 16:42: finished 28 characters, then 34..81 starting with them,
+     * then the same 28 finished again). Shorter ones may really be said twice ("Да. Да, конечно").
+     */
+    static final int REPEAT_MIN_LETTERS = 12;
     /** A final result this soon after the same text was typed from a partial result is a repeat. */
     static final long REPEAT_MS = 1500;
 
@@ -51,6 +57,20 @@ final class PhraseTracker {
     /** Text typed from a partial result (not from a final one), and when. */
     private String typed = "";
     private long typedAt;
+    /**
+     * The beginning of the phrase in progress that is already fixed in the editor: the user moved the
+     * cursor or pressed a key while it was shown, or the engine repeated a finished phrase. Only the
+     * text after it is shown and typed.
+     */
+    private String fixed = "";
+    /** {@link #fixed} came from the engine: strip it only where the text really starts with it. */
+    private boolean fixedStrict;
+    /** The last finished phrase of a continuous session and the text shown just before it. */
+    private String finished = "";
+    private String beforeFinished = "";
+
+    /** How many times the engine repeated a finished phrase (for the log). */
+    int repeats;
 
     PhraseTracker(Sink sink) { this.sink = sink; }
 
@@ -60,6 +80,19 @@ final class PhraseTracker {
         ended = false;
         pending = "";
         endOfSpeechAt = -1;
+        fixed = "";
+        finished = "";
+    }
+
+    /**
+     * The text shown for the phrase in progress was fixed in the editor as it is (the user moved the
+     * cursor or pressed a key). From now on only what the engine adds after it is shown and typed,
+     * otherwise the phrase would be typed a second time at the cursor.
+     */
+    void detach() {
+        if (blank(pending)) return;
+        fixed = pending;
+        fixedStrict = false;
     }
 
     /** The engine heard a pause. */
@@ -73,10 +106,38 @@ final class PhraseTracker {
         String text = hypotheses == null || hypotheses.isEmpty() || hypotheses.get(0) == null ? "" : hypotheses.get(0);
         if (ended || blank(text)) return true;
         if (continuous && hypotheses.size() >= 2) {
+            String out = rest(text);
+            // The engine finishes phrases its own way: a finished phrase may be only the beginning of
+            // what is already fixed (Enter pressed twice inside one phrase of the engine). The fixed
+            // text after it stays fixed: the engine shows it again as the next phrase in progress.
+            String left = fixed.isEmpty() ? "" : TextPost.afterPrefix(text, fixed);
+            beforeFinished = pending;
+            finished = text;
             pending = "";
+            fixed = blank(left) ? "" : left;
+            fixedStrict = false;
             typed = text;
             typedAt = now;
-            return sink.commit(text);
+            // Nothing new in the finished phrase: what is shown is the rest after it, which the engine
+            // shows again as the next phrase in progress. Clear it, "" alone would keep it typed.
+            if (blank(out)) sink.compose("");
+            return sink.commit(out);
+        }
+        if (continuous && blank(pending) && !blank(finished) && fixed.isEmpty()) {
+            // The first partial after a finished phrase. The engine sometimes repeats the text it showed
+            // before the phrase was finished (observed: finished 8 characters, then the same 64 again);
+            // the finished phrase is already typed, only the rest of that text is new.
+            String a = TextPost.letters(finished), b = TextPost.letters(beforeFinished), c = TextPost.letters(text);
+            if (b.length() > a.length() && b.startsWith(a) && c.equals(b)) {
+                fixed = finished;
+                fixedStrict = true;
+                repeats++;
+            } else if (a.length() >= REPEAT_MIN_LETTERS && c.startsWith(a)) {
+                fixed = finished;
+                fixedStrict = true;
+                repeats++;
+            }
+            finished = "";
         }
         if (!blank(pending) && TextPost.isNewPhrase(pending, text)
                 && (now - pendingAt >= NEW_PHRASE_GAP_MS || endOfSpeechAt >= pendingChangedAt)) {
@@ -85,7 +146,7 @@ final class PhraseTracker {
         if (!TextPost.letters(text).equals(TextPost.letters(pending))) pendingChangedAt = now;
         pending = text;
         pendingAt = now;
-        sink.compose(text);
+        sink.compose(rest(text));
         return true;
     }
 
@@ -97,6 +158,7 @@ final class PhraseTracker {
         String fin = text == null ? "" : text;
         String shown = pending;
         pending = "";
+        finished = "";
         if (endsSession) ended = true;
         if (blank(shown) && now - typedAt < REPEAT_MS && TextPost.coveredBy(typed, fin)) return true;
         if (continuous) {
@@ -111,7 +173,9 @@ final class PhraseTracker {
                 typedAt = now;
             }
         }
-        return sink.commit(fin);
+        String out = rest(fin);
+        fixed = "";
+        return sink.commit(out);
     }
 
     /**
@@ -126,10 +190,23 @@ final class PhraseTracker {
     private boolean flush(long now) {
         if (blank(pending)) return true;
         String p = pending;
+        String out = rest(p);
         pending = "";
+        fixed = "";
         typed = p;
         typedAt = now;
-        return sink.commit(p);
+        return sink.commit(out);
+    }
+
+    /** The part of the text after what is already fixed in the editor. */
+    private String rest(String text) {
+        if (fixed.isEmpty()) return text;
+        String r = TextPost.afterPrefix(fixed, text, !fixedStrict);
+        if (r == null) {
+            fixed = "";   // the engine dropped the repeated text: nothing to strip any more
+            return text;
+        }
+        return r;
     }
 
     /** Nothing to type: empty or spaces only. A lone line break is text (the engine's "new line"). */

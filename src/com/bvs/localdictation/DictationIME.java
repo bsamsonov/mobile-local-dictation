@@ -31,6 +31,7 @@ import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
+import android.view.inputmethod.TextSnapshot;
 import android.text.InputType;
 import android.widget.Button;
 import android.widget.ImageButton;
@@ -89,6 +90,7 @@ public class DictationIME extends InputMethodService
             // The engine closed the audio pipe but reported nothing: the session is dead.
             Log.w(TAG, "engine closed the audio pipe without ending the session; restarting");
             markHandoff();
+            checkCursor();
             if (!phrases.sessionFailed(SystemClock.elapsedRealtime())) return;   // spoken "stop"
             recreateRecognizer();
             restartSoon(200);
@@ -114,6 +116,9 @@ public class DictationIME extends InputMethodService
     private boolean segmentCapitalize;
     /** The text before the phrase ends with a punctuation mark. */
     private boolean segmentAfterMark;
+    /** The composing (underlined) text this keyboard put into the editor; "" if none. */
+    private String shown = "";
+
 
     // Screen locked during dictation: recognized text is held here instead of being typed into
     // whatever window has input now (the lock screen), and inserted after unlock.
@@ -174,7 +179,7 @@ public class DictationIME extends InputMethodService
         mic.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
         mic.setTypeface(Typeface.DEFAULT_BOLD);
         row1.addView(mic, weight(3));
-        Button del = key("⌫", v -> sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL));
+        Button del = key("⌫", v -> deleteBack());
         row1.addView(del, weight(1));
         root.addView(row1, new LinearLayout.LayoutParams(-1, dp(72)));
 
@@ -192,7 +197,7 @@ public class DictationIME extends InputMethodService
         row2.addView(key(".", v -> commitRaw(".")), weight(1));
         row2.addView(key("?", v -> commitRaw("?")), weight(1));
         row2.addView(key(getString(R.string.key_space), v -> commitRaw(" ")), weight(3));
-        Button enter = key("↵", v -> sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER));
+        Button enter = key("↵", v -> enter());
         enter.setTextSize(TypedValue.COMPLEX_UNIT_SP, 30);
         enter.setTypeface(Typeface.DEFAULT_BOLD);
         enter.setPadding(0, 0, 0, 0);
@@ -201,6 +206,71 @@ public class DictationIME extends InputMethodService
 
         updateUi(null);
         return root;
+    }
+
+    /**
+     * Enter as the AOSP keyboard (LatinIME) does it: a line break typed as text in a multi-line field,
+     * the field's action (send, search, next...) where it has one, a KEYCODE_ENTER key event otherwise.
+     * A key event in Samsung Notes right after dictated text often types the last words once more.
+     */
+    private void enter() {
+        InputConnection ic = getCurrentInputConnection();
+        if (ic == null) return;
+        Log.d(TAG, "key enter, shown " + shown.length() + " chars");
+        releaseComposing();
+        ic.finishComposingText();
+        EditorInfo ei = getCurrentInputEditorInfo();
+        int action = ei == null ? EditorInfo.IME_ACTION_UNSPECIFIED : ei.imeOptions & EditorInfo.IME_MASK_ACTION;
+        boolean noAction = ei == null || (ei.imeOptions & EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0
+                || action == EditorInfo.IME_ACTION_NONE || action == EditorInfo.IME_ACTION_UNSPECIFIED;
+        boolean multiLine = ei != null && (ei.inputType & InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0;
+        if (multiLine && noAction) ic.commitText("\n", 1);
+        else if (!noAction) ic.performEditorAction(action);
+        else sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER);
+        segmentStarted = false;
+    }
+
+    private void deleteBack() {
+        if (getCurrentInputConnection() == null) return;
+        releaseComposing();
+        sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL);
+    }
+
+    /**
+     * A key edits the text while a phrase is shown underlined: the shown words stay as they are, and
+     * only what the engine adds after them is typed later. Otherwise the editor and this keyboard
+     * disagree about the underlined text and the phrase is typed a second time.
+     */
+    private void releaseComposing() {
+        if (shown.isEmpty()) return;
+        InputConnection ic = target();
+        if (ic != null) ic.finishComposingText();
+        phrases.detach();
+        segmentStarted = false;
+        shown = "";
+    }
+
+    /**
+     * Before the next edit: did the user move the cursor away from the underlined phrase, or did the
+     * editor drop the underline (Samsung Notes may fix the composing text on a tap)? Then the shown
+     * words are fixed where they are, and only the rest of the phrase goes to the cursor.
+     */
+    private void checkCursor() {
+        if (shown.isEmpty()) return;
+        InputConnection ic = target();
+        if (ic == null) return;
+        boolean moved;
+        TextSnapshot snap = Build.VERSION.SDK_INT >= 33 ? ic.takeSnapshot() : null;
+        if (snap != null) {
+            moved = snap.getCompositionStart() < 0 || snap.getSelectionStart() != snap.getSelectionEnd()
+                    || snap.getSelectionEnd() != snap.getCompositionEnd();
+        } else {
+            CharSequence b = ic.getTextBeforeCursor(shown.length(), 0);
+            moved = b == null || !b.toString().equals(shown);
+        }
+        if (!moved) return;
+        Log.d(TAG, "cursor left the phrase in progress (snapshot=" + (snap != null) + ")");
+        releaseComposing();
     }
 
     private LinearLayout row() {
@@ -294,6 +364,7 @@ public class DictationIME extends InputMethodService
             lockedBefore = b == null ? "" : b.toString();
         }
         segmentStarted = false;
+        shown = "";
         Log.d(TAG, "screen locked: dictation continues, pkg=" + lockedPackage);
     }
 
@@ -310,6 +381,7 @@ public class DictationIME extends InputMethodService
         if (same) {
             if (!text.isEmpty()) ic.commitText(text, 1);
             segmentStarted = false;
+            shown = "";
             updateUi(listening ? readyStatus() : null);
             return;
         }
@@ -441,10 +513,12 @@ public class DictationIME extends InputMethodService
     /** Restarts capture and the session on the current route, keeping dictation on. */
     private void reroute() {
         handler.removeCallbacksAndMessages(null);
+        checkCursor();
         if (!phrases.sessionFailed(SystemClock.elapsedRealtime())) return;   // spoken "stop"
         InputConnection ic = target();
         if (ic != null) ic.finishComposingText();
         segmentStarted = false;
+        shown = "";
         stopFeeder();
         recreateRecognizer();
         openMic();
@@ -476,6 +550,7 @@ public class DictationIME extends InputMethodService
             return;
         }
         segmentStarted = false;
+        shown = "";
         Log.d(TAG, "startListening " + Speech.language(this) + " feeder=" + (feeder != null));
         sessionLive = false;
         ParcelFileDescriptor pfd = null;
@@ -513,6 +588,7 @@ public class DictationIME extends InputMethodService
         InputConnection ic = target();
         if (ic != null) ic.finishComposingText();
         segmentStarted = false;
+        shown = "";
         updateUi(null);
     }
 
@@ -559,9 +635,11 @@ public class DictationIME extends InputMethodService
     private void commitRaw(String s) {
         InputConnection ic = getCurrentInputConnection();
         if (ic == null) return;
+        releaseComposing();
         ic.finishComposingText();
         ic.commitText(s, 1);
         segmentStarted = false;
+        shown = "";
     }
 
     /** Decide leading space / capitalisation from the text before the cursor. */
@@ -691,9 +769,13 @@ public class DictationIME extends InputMethodService
     @Override
     public void onPartialResults(Bundle partialResults) {
         ArrayList<String> hyps = hypotheses(partialResults);
-        Log.d(TAG, "partial: " + hypLengths(partialResults) + " chars");
+        Log.d(TAG, "partial: " + hypLengths(partialResults) + " chars"
+                + (hyps.size() >= 2 ? " #" + Integer.toHexString(TextPost.letters(hyps.get(0)).hashCode() & 0xffff) : ""));
         handler.removeCallbacks(watchdog);
+        checkCursor();
+        int repeats = phrases.repeats;
         phrases.partial(hyps, SystemClock.elapsedRealtime());
+        if (phrases.repeats != repeats) Log.d(TAG, "engine repeated the finished phrase: not typed again");
     }
 
     /** PhraseTracker.Sink: the phrase in progress, shown as composing (underlined) text. */
@@ -702,13 +784,15 @@ public class DictationIME extends InputMethodService
         InputConnection ic = target();
         if (ic == null) return;   // locked: the finished phrase goes to the held text
         if (!segmentStarted) decideSegmentFormat(ic);
-        ic.setComposingText(format(text), 1);
+        shown = format(text);
+        ic.setComposingText(shown, 1);
     }
 
     @Override
     public void onResults(Bundle results) {
         Log.d(TAG, "results: " + hypLengths(results) + " chars");
         markHandoff();
+        checkCursor();
         if (!phrases.result(best(results), true, SystemClock.elapsedRealtime())) return;
         // Non-segmented mode. The engine may still deliver a second result for the same
         // utterance shortly after the first one; restarting immediately cancels it and
@@ -723,6 +807,7 @@ public class DictationIME extends InputMethodService
     @Override
     public void onSegmentResults(Bundle segmentResults) {
         Log.d(TAG, "segment: " + hypLengths(segmentResults) + " chars");
+        checkCursor();
         phrases.result(best(segmentResults), false, SystemClock.elapsedRealtime());
     }
 
@@ -735,6 +820,7 @@ public class DictationIME extends InputMethodService
         InputConnection ic = target();
         if (ic != null) ic.finishComposingText();
         segmentStarted = false;
+        shown = "";
         if (listening) restartSoon(100);
         else updateUi(null);
     }
@@ -769,6 +855,7 @@ public class DictationIME extends InputMethodService
             }
         }
         segmentStarted = false;
+        shown = "";
         if (stopCommand) {
             listening = false;
             Speech.setStoppedByUser(this, true);
@@ -789,6 +876,7 @@ public class DictationIME extends InputMethodService
         // The engine may fail instead of delivering the final result: the phrase in progress becomes
         // final as shown, so voice commands and digits still apply (also after Stop).
         boolean hadPhrase = phrases.hasPending();
+        checkCursor();
         if (!phrases.sessionFailed(SystemClock.elapsedRealtime())) return;   // spoken "stop"
         if (listening && hadPhrase) {
             if (error == SpeechRecognizer.ERROR_CLIENT || error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED) recreateRecognizer();
@@ -798,6 +886,7 @@ public class DictationIME extends InputMethodService
         InputConnection ic = target();
         if (ic != null) ic.finishComposingText();
         segmentStarted = false;
+        shown = "";
         if (!listening) { updateUi(null); return; }
 
         switch (error) {

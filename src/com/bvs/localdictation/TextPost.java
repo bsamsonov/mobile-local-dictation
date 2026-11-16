@@ -73,6 +73,52 @@ final class TextPost {
         return !t.isEmpty() && letters(committed).contains(t);
     }
 
+    /**
+     * The part of {@code text} after its beginning {@code prefix}, compared by letters and digits
+     * (case, spaces and punctuation ignored); "" if nothing follows, also if {@code text} is itself a
+     * beginning of the prefix (all of it is already there). If {@code text} does not start
+     * with the prefix (the engine revised those words): with {@code byWords}, the words after as many
+     * words as the prefix has; otherwise null.
+     */
+    static String afterPrefix(String prefix, String text) { return afterPrefix(prefix, text, true); }
+
+    static String afterPrefix(String prefix, String text, boolean byWords) {
+        String p = letters(prefix), t = text == null ? "" : text;
+        int i = 0, matched = 0;
+        boolean mismatch = false;
+        while (matched < p.length() && i < t.length()) {
+            int cp = t.codePointAt(i);
+            if (Character.isLetterOrDigit(cp)) {
+                int lc = Character.toLowerCase(cp) == 'ё' ? 'е' : Character.toLowerCase(cp);
+                if (p.codePointAt(matched) != lc) { mismatch = true; break; }
+                matched += Character.charCount(lc);
+            }
+            i += Character.charCount(cp);
+        }
+        if (!mismatch && matched < p.length() && matched > 0) return "";   // text is a beginning of the prefix
+        if (matched == p.length()) {
+            String r = t.substring(i);
+            // A sentence mark the fixed text already ends with is not typed again.
+            String pt = prefix.trim();
+            boolean endsWithMark = !pt.isEmpty() && ".!?…".indexOf(pt.charAt(pt.length() - 1)) >= 0;
+            int j = 0;
+            while (endsWithMark && j < r.length() && ".!?…".indexOf(r.charAt(j)) >= 0) j++;
+            return blankText(r.substring(j)) ? "" : r.substring(j);
+        }
+        if (!byWords) return null;
+        int n = words(prefix).length;
+        String[] w = words(t);
+        if (w.length <= n) return "";
+        return " " + String.join(" ", java.util.Arrays.copyOfRange(w, n, w.length));
+    }
+
+    private static String[] words(String s) {
+        String t = s == null ? "" : s.trim();
+        return t.isEmpty() ? new String[0] : t.split("\\s+");
+    }
+
+    private static boolean blankText(String s) { return s.trim().isEmpty() && s.indexOf('\n') < 0; }
+
     /** Lowercase letters and digits of the text, nothing else. */
     static String letters(String s) {
         if (s == null) return "";

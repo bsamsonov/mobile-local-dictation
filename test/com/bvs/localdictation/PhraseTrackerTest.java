@@ -152,6 +152,99 @@ public class PhraseTrackerTest {
         boolean go = t.partial(hyps("Текст стоп.", "текст стоп"), 1500);
         check("commit that stops the dictation is reported", String.valueOf(go), "false");
 
+        // ---- the engine repeats the text shown before a finished phrase (log 16.11: 64 -> [8, 7] -> 64)
+        out = new Typed();
+        t = new PhraseTracker(out);
+        t.sessionStart(true);
+        t.partial(hyps("Хорошо. Теперь проверим повтор"), 1000);
+        t.partial(hyps("Хорошо.", "хорошо"), 2000);
+        t.partial(hyps("Хорошо. Теперь проверим повтор"), 2001);    // stale: still holds the finished phrase
+        check("repeated finished phrase is not shown again", out.text(), "Хорошо. | [shown] Теперь проверим повтор");
+        t.result("", true, 4000);                                  // Stop right here
+        check("repeated finished phrase is not typed again", out.text(), "Хорошо. | Теперь проверим повтор");
+
+        out = new Typed();
+        t = new PhraseTracker(out);
+        t.sessionStart(true);
+        t.partial(hyps("Да. Да, конечно"), 1000);
+        t.partial(hyps("Да.", "да"), 2000);
+        t.partial(hyps(" Да, конечно"), 2001);                     // a real rest that starts the same way
+        t.result("", true, 3000);
+        check("rest starting with the finished words is kept", out.text(), "Да. | Да, конечно");
+
+        out = new Typed();
+        t = new PhraseTracker(out);
+        t.sessionStart(true);
+        t.partial(hyps("Сегодня хорошая погода. Пойду"), 1000);
+        t.partial(hyps("Сегодня хорошая погода.", "сегодня хорошая погода"), 2000);
+        t.partial(hyps(" Сегодня хорошая погода. Пойду гулять"), 2001);   // the engine starts with it again
+        t.partial(hyps(" Сегодня хорошая погода.", "сегодня хорошая погода"), 3000);   // and finishes it twice
+        t.partial(hyps(" Пойду гулять."), 3001);
+        t.result("", true, 5000);
+        check("engine repeating a finished phrase in the next one", out.text(),
+                "Сегодня хорошая погода. | Пойду гулять.");
+
+        // ---- the user moves the cursor (or presses a key) while a phrase is shown
+        out = new Typed();
+        t = new PhraseTracker(out);
+        t.sessionStart(true);
+        t.partial(hyps("Сегодня я хочу"), 1000);
+        out.phrases.add(out.composing.trim());                     // the editor fixes the shown text
+        out.composing = "";
+        t.detach();
+        t.partial(hyps("Сегодня я хочу записать"), 1100);
+        check("after the cursor moved only new words are shown", out.text(), "Сегодня я хочу | [shown] записать");
+        t.partial(hyps("Сегодня я хочу записать мысли.", "сегодня я хочу записать мысли"), 2000);
+        check("finished phrase after the cursor moved: only the rest", out.text(), "Сегодня я хочу | записать мысли.");
+        t.partial(hyps(" Дальше."), 2001);
+        t.result("", true, 3000);
+        check("next phrase is whole again", out.text(), "Сегодня я хочу | записать мысли. | Дальше.");
+
+        out = new Typed();
+        t = new PhraseTracker(out);
+        t.sessionStart(true);
+        t.partial(hyps("сегодня я хочу"), 1000);
+        out.phrases.add(out.composing.trim());
+        out.composing = "";
+        t.detach();
+        t.partial(hyps("Сегодня я хотел записать"), 1100);       // the engine revised a fixed word
+        t.result("", true, 3000);
+        check("revised fixed words are not typed again", out.text(), "сегодня я хочу | записать");
+
+        out = new Typed();
+        t = new PhraseTracker(out);
+        t.sessionStart(true);
+        t.partial(hyps("Привет мир"), 1000);
+        out.phrases.add(out.composing.trim());
+        out.composing = "";
+        t.detach();
+        t.result("", true, 3000);                                  // Stop with nothing new
+        check("Stop after the cursor moved types nothing twice", out.text(), "Привет мир");
+
+        // log 16.11 16:56: Enter at 29 chars, at 73 and at 122; the engine finishes 73, then shows the rest
+        out = new Typed();
+        t = new PhraseTracker(out);
+        t.sessionStart(true);
+        String[] enter = {"Первая строка", "Первая строка вторая строка", "Первая строка вторая строка третья строка"};
+        long now = 1000;
+        for (String e : enter) {
+            t.partial(hyps(e), now += 100);
+            out.phrases.add(out.composing.trim());                 // Enter: the editor fixes the shown text
+            out.composing = "";
+            t.detach();
+        }
+        t.partial(hyps("Первая строка вторая строка.", "первая строка вторая строка"), now += 100);
+        t.partial(hyps(" Третья строка"), now += 1);
+        t.partial(hyps(" Третья строка четвёртая"), now += 300);
+        t.partial(hyps(" Третья строка четвёртая.", "третья строка четвёртая"), now += 300);
+        t.result("", true, now += 1000);
+        check("Enter inside a long phrase of the engine: every word once", out.text(),
+                "Первая строка | вторая строка | третья строка | четвёртая.");
+
+        check("afterPrefix: text is a beginning of the prefix", TextPost.afterPrefix("один два три", "Один два"), "");
+        check("afterPrefix keeps a new mark", TextPost.afterPrefix("привет мир", "Привет, мир. Как дела"), ". Как дела");
+        check("afterPrefix drops a repeated mark", TextPost.afterPrefix("Привет, мир.", "Привет, мир. Как дела"), " Как дела");
+
         // ---- the engine's own microphone (segmented session)
         out = new Typed();
         t = new PhraseTracker(out);
