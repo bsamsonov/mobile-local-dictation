@@ -27,7 +27,9 @@ import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
@@ -119,6 +121,18 @@ public class DictationIME extends InputMethodService
     /** The composing (underlined) text this keyboard put into the editor; "" if none. */
     private String shown = "";
 
+    /** Backspace held down: repeats like on a regular keyboard (see onDeleteTouch). */
+    private final Handler keyRepeat = new Handler(Looper.getMainLooper());
+    private int deleteRepeats;
+    /** After this many repeats two characters go per repeat, as in the AOSP keyboard (LatinIME). */
+    private static final int DELETE_ACCELERATE_AT = 20;
+    private final Runnable deleteRepeat = new Runnable() {
+        @Override public void run() {
+            deleteBack();
+            if (++deleteRepeats > DELETE_ACCELERATE_AT) deleteBack();
+            keyRepeat.postDelayed(this, ViewConfiguration.getKeyRepeatDelay());
+        }
+    };
 
     // Screen locked during dictation: recognized text is held here instead of being typed into
     // whatever window has input now (the lock screen), and inserted after unlock.
@@ -179,7 +193,8 @@ public class DictationIME extends InputMethodService
         mic.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
         mic.setTypeface(Typeface.DEFAULT_BOLD);
         row1.addView(mic, weight(3));
-        Button del = key("⌫", v -> deleteBack());
+        Button del = key("⌫", null);
+        del.setOnTouchListener(this::onDeleteTouch);
         row1.addView(del, weight(1));
         root.addView(row1, new LinearLayout.LayoutParams(-1, dp(72)));
 
@@ -206,6 +221,30 @@ public class DictationIME extends InputMethodService
 
         updateUi(null);
         return root;
+    }
+
+    /**
+     * Backspace like on a regular keyboard: one character on touch; held down, it repeats after the
+     * system key repeat timeout (the long-press timeout) every key repeat delay (50 ms), and after
+     * DELETE_ACCELERATE_AT repeats deletes two characters per repeat. Returns false so the button
+     * still shows its pressed state.
+     */
+    private boolean onDeleteTouch(View v, MotionEvent e) {
+        switch (e.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                keyRepeat.removeCallbacks(deleteRepeat);
+                deleteRepeats = 0;
+                deleteBack();
+                keyRepeat.postDelayed(deleteRepeat, ViewConfiguration.getKeyRepeatTimeout());
+                break;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                keyRepeat.removeCallbacks(deleteRepeat);
+                break;
+            default:
+                break;
+        }
+        return false;
     }
 
     /**
@@ -288,7 +327,7 @@ public class DictationIME extends InputMethodService
         Button b = new Button(this);
         b.setText(label);
         b.setAllCaps(false);
-        b.setOnClickListener(l);
+        if (l != null) b.setOnClickListener(l);
         return b;
     }
 
@@ -336,6 +375,7 @@ public class DictationIME extends InputMethodService
 
     @Override
     public void onFinishInputView(boolean finishingInput) {
+        keyRepeat.removeCallbacks(deleteRepeat);
         Log.d(TAG, "onFinishInputView listening=" + listening + " screenLocked=" + screenLocked());
         if (listening && !locked && screenLocked()) enterLocked();
         else if (!locked) haltListening();
